@@ -87,18 +87,22 @@ def traiter_un_fichier(nom_fichier):
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         model = genai.GenerativeModel("gemini-2.0-flash")
         
+        # PROMPT MIS A JOUR AVEC RIB / TVA / ADRESSE
         prompt = """
-        Analyse cette facture.
+        Analyse cette facture et extrais TOUTES les données structurées.
         
-        1. INFOS CLÉS :
-           - Client / Fournisseur
-           - DATE de la facture (Format YYYY-MM-DD). C'est très important.
+        1. INFOS ENTREPRISE & SÉCURITÉ :
+           - Fournisseur (Nom complet)
+           - Adresse du fournisseur (Ville/CP)
+           - NUMÉRO DE TVA Intracommunautaire du fournisseur
+           - IBAN / RIB : Cherche le code IBAN complet du fournisseur pour contrôle fraude.
+           - DATE de la facture (Format YYYY-MM-DD).
            - NUMÉRO DE FACTURE
            - NUMÉRO DE COMMANDE (Ref Client / Chantier)
 
         2. TABLEAU PRODUITS :
            Extrais ligne par ligne.
-           ⚠️ IMPORTANT : Pour chaque ligne produit, regarde juste au-dessus ou sur la même ligne si un "Bon de Livraison" (BL) est indiqué.
+           ⚠️ IMPORTANT : Regarde si un "Bon de Livraison" (BL) est indiqué pour la ligne.
            
            Champs à extraire par ligne :
            - quantite (nombre)
@@ -110,14 +114,15 @@ def traiter_un_fichier(nom_fichier):
            
            ⚠️ IGNORE DEEE/TVA/Eco-part.
 
-        3. FRAIS CACHÉS (Pied de page) :
-           Port, Gestion, Energie... -> Crée une ligne article="FRAIS_DETECTE".
-
         JSON ATTENDU :
         {
             "fournisseur": "...",
+            "adresse_fournisseur": "...",
+            "tva_fournisseur": "FR...",
+            "iban": "FR76...",
             "date": "2025-03-31",
             "num_facture": "...",
+            "ref_commande": "...",
             "lignes": [
                 {"quantite": 50, "article": "...", "prix_net": 2.5, "montant": 125.0, "num_bl_ligne": "BL123456"}
             ]
@@ -129,7 +134,7 @@ def traiter_un_fichier(nom_fichier):
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
-        # SAUVEGARDE COMPLETE (Raw Text + JSON)
+        # SAUVEGARDE COMPLETE
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
             "analyse_complete": json.dumps(data_json),
@@ -166,6 +171,11 @@ if session:
             date_fac = data.get('date', 'Inconnue')
             num_fac = data.get('num_facture', '-')
             ref_cmd = data.get('ref_commande', '-')
+            
+            # NOUVEAUX CHAMPS DE SÉCURITÉ
+            iban_f = data.get('iban', '-')
+            tva_f = data.get('tva_fournisseur', '-')
+            adr_f = data.get('adresse_fournisseur', '-')
 
             if "YESSS" in fourn: fourn = "YESSS ELECTRIQUE"
             elif "AUSTRAL" in fourn: fourn = "AUSTRAL HORIZON"
@@ -180,7 +190,7 @@ if session:
                 p_net = clean_float(l.get('prix_net', 0))
                 num_bl = l.get('num_bl_ligne', '-')
                 
-                # Correction intelligente Quantité/Prix
+                # Correction intelligente
                 qte_finale = qte_ia
                 if montant > 0 and p_net > 0:
                     ratio = montant / p_net
@@ -209,6 +219,9 @@ if session:
                     "Ref_Cmd": ref_cmd,
                     "BL": num_bl,
                     "Fournisseur": fourn,
+                    "IBAN": iban_f,          # AJOUTÉ
+                    "TVA_Intra": tva_f,      # AJOUTÉ
+                    "Adresse": adr_f,        # AJOUTÉ
                     "Quantité": qte_finale,
                     "Article": article,
                     "Désignation": l.get('designation', ''),
@@ -414,7 +427,7 @@ if session:
                 st.success("✅ Clean sheet. Aucune anomalie détectée.")
             
             st.divider()
-            with st.expander("📝 Données brutes"):
+            with st.expander("📝 Données brutes (AVEC IBAN/TVA)"):
                 st.dataframe(df, use_container_width=True)
 
     # --- TAB 3 : IMPORT (AVEC SÉCURITÉ ANTI-QUOTA) ---
@@ -442,31 +455,32 @@ if session:
             uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
             force_rewrite = st.checkbox("⚠️ Écraser doublons (Forcer ré-analyse)", value=False)
             
-            if uploaded and st.button("🚀 LANCER"):
-                barre = st.progress(0)
-                status = st.empty()
-                for i, f in enumerate(uploaded):
-                    
-                    # 🛑 RALENTISSEUR : On force le 1 par 1 (2 secondes de pause)
-                    time.sleep(2)
-                    
-                    if f.name in memoire and not force_rewrite:
-                        status.warning(f"⚠️ {f.name} ignoré (déjà présent).")
-                        time.sleep(0.5)
-                    else:
-                        status.write(f"⏳ Analyse ({i+1}/{len(uploaded)}) : **{f.name}**...")
-                        try:
-                            supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                            ok, msg = traiter_un_fichier(f.name)
-                            if ok: st.toast(f"✅ {f.name} OK")
-                            else: st.error(f"❌ {f.name}: {msg}")
-                        except Exception as up_err:
-                            st.error(f"Erreur Upload {f.name}: {up_err}")
-                            
-                    barre.progress((i + 1) / len(uploaded))
-                status.success("✅ Traitement terminé !")
-                time.sleep(1)
-                st.rerun()
+            if uploaded: # Ligne corrigée pour afficher le bouton même si clic
+                if st.button("🚀 LANCER"):
+                    barre = st.progress(0)
+                    status = st.empty()
+                    for i, f in enumerate(uploaded):
+                        
+                        # 🛑 RALENTISSEUR : On force le 1 par 1 (2 secondes de pause)
+                        time.sleep(2)
+                        
+                        if f.name in memoire and not force_rewrite:
+                            status.warning(f"⚠️ {f.name} ignoré (déjà présent).")
+                            time.sleep(0.5)
+                        else:
+                            status.write(f"⏳ Analyse ({i+1}/{len(uploaded)}) : **{f.name}**...")
+                            try:
+                                supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
+                                ok, msg = traiter_un_fichier(f.name)
+                                if ok: st.toast(f"✅ {f.name} OK")
+                                else: st.error(f"❌ {f.name}: {msg}")
+                            except Exception as up_err:
+                                st.error(f"Erreur Upload {f.name}: {up_err}")
+                                
+                        barre.progress((i + 1) / len(uploaded))
+                    status.success("✅ Traitement terminé !")
+                    time.sleep(1)
+                    st.rerun()
 
     # --- TAB 4 : DATA (SCAN TOTAL) ---
     with tab_brut:
