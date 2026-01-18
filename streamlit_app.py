@@ -190,4 +190,58 @@ if session:
         if df.empty: st.warning("⚠️ Aucune donnée.")
         else:
             # Ici tout ton code d'analyse original (Podium, Dettes, etc.)
-            df_produits =
+            df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
+            ref_map = {}
+            if not df_produits.empty:
+                df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
+                if not df_clean.empty:
+                    best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
+                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date']].to_dict('index')
+
+            facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
+            anomalies = []
+            for idx, row in df.iterrows():
+                f_name, fourn = row['Fichier'], row['Fournisseur']
+                rules = config_dict.get(fourn, {"Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0})
+                perte, motif, cible = 0, "", 0
+                
+                if row['Famille'] == 'FRAIS PORT' and rules["Franco (Seuil €)"] > 0 and facture_totals.get(f_name, 0) >= rules["Franco (Seuil €)"]:
+                    perte, motif = row['Montant'], "Hors Franco"
+                elif row['Article'] in ref_map and row['PU_Systeme'] > ref_map[row['Article']]['PU_Systeme'] + 0.005:
+                    perte = (row['PU_Systeme'] - ref_map[row['Article']]['PU_Systeme']) * row['Quantité']
+                    motif, cible = "Hausse Prix", ref_map[row['Article']]['PU_Systeme']
+
+                if perte > 0.01:
+                    anomalies.append({**row, "Perte": perte, "Motif": motif, "Cible (U)": cible})
+
+            if anomalies:
+                df_ano = pd.DataFrame(anomalies)
+                st.metric("💸 PERTE TOTALE", f"{df_ano['Perte'].sum():.2f} €")
+                st.dataframe(df_ano, use_container_width=True)
+            else: st.success("✅ Clean sheet.")
+
+    with tab_import:
+        st.header("📥 Charger")
+        c_i, c_d = st.columns([1, 2])
+        with c_i:
+            st.write("📂 **En mémoire :**")
+            st.dataframe(pd.DataFrame({"Fichiers": list(memoire.keys())}), hide_index=True)
+            st.divider()
+            # TON BOUTON ROUGE
+            if st.button("🗑️ TOUT EFFACER (RAZ BASE)", type="primary", key="raz"):
+                supabase.table("audit_results").delete().neq("file_name", "0").execute()
+                st.rerun()
+        with c_d:
+            uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
+            if uploaded and st.button("🚀 LANCER"):
+                for f in uploaded:
+                    supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
+                    traiter_un_fichier(f.name)
+                st.rerun()
+
+    with tab_brut:
+        st.header("🔍 Scan total des documents")
+        if memoire_full:
+            choix = st.selectbox("Fichier :", list(memoire_full.keys()))
+            if choix:
+                st.text_area("Résultat Scan", memoire_full[choix].get('raw_text', 'Aucun scan'), height=500)
