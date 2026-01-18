@@ -15,7 +15,7 @@ URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
-st.set_page_config(page_title="Audit V19 - MultiUser", page_icon="🏗️", layout="wide")
+st.set_page_config(page_title="Audit V21 - Logique Universelle", page_icon="🏗️", layout="wide")
 
 st.markdown("""
 <style>
@@ -60,7 +60,8 @@ def detecter_famille(label, ref=""):
     label_up, ref_up = label.upper(), ref.upper()
     
     mots_cles_frais_ref = ["PORT", "FRAIS", "SANS_REF", "DEEE", "TAXE", "ECO", "DIVERS"]
-    ref_is_technique = (len(ref) > 3) and (ref_up not in mots_cles_frais_ref)
+    is_ref_exclusion = any(kw in ref_up for kw in mots_cles_frais_ref)
+    ref_is_technique = (len(ref) > 3) and (not is_ref_exclusion)
     
     if ref_is_technique:
         if any(x in label_up for x in ["CLIM", "PAC", "POMPE A CHALEUR", "SPLIT"]): return "CLIM / PAC"
@@ -84,12 +85,12 @@ def extraire_json_robuste(texte):
 
 def traiter_un_fichier(nom_fichier, user_id):
     try:
-        # On ajoute le user_id dans le dossier de stockage pour éviter les conflits de noms entre users
         path_storage = f"{user_id}/{nom_fichier}"
-        file_data = supabase.storage.from_("factures_audit").download(nom_fichier) # Note: idéalement le storage doit aussi être cloisonné, mais on simplifie ici
+        file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         
         model = genai.GenerativeModel("gemini-2.0-flash")
         
+        # 👇 ICI : LA CONSIGNE MODIFIÉE SELON TA LOGIQUE "MONTANT SANS REF = FRAIS"
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
         
@@ -102,31 +103,31 @@ def traiter_un_fichier(nom_fichier, user_id):
            - NUMÉRO DE FACTURE
            - NUMÉRO DE COMMANDE (Ref Client / Chantier)
 
-        2. TABLEAU PRODUITS :
-           Extrais ligne par ligne.
-           ⚠️ IMPORTANT : Regarde si un "Bon de Livraison" (BL) est indiqué pour la ligne.
+        2. EXTRACTION INTELLIGENTE DES LIGNES :
+           - Extrais le tableau principal des produits.
            
-           Champs à extraire par ligne :
-           - quantite (nombre)
-           - article (référence)
-           - designation (description)
-           - prix_net (Prix unitaire payé tel qu'écrit)
-           - montant (Total ligne HT tel qu'écrit)
-           - num_bl_ligne (Le numéro de BL spécifique à cette ligne)
+           - ⚠️ RÈGLE D'OR (BAS DE PAGE) : Scanne minutieusement le bas de la facture (zone des totaux/taxes).
+           Si tu trouves un MONTANT qui s'ajoute au total mais qui n'est pas de la TVA (exemple: une somme forfaitaire, un port, un emballage, ou une colonne "Divers/FF")...
+           ... ALORS C'EST UN FRAIS !
            
-           ⚠️ IGNORE DEEE/TVA/Eco-part.
+           Pour ces montants trouvés en bas de page :
+           - Cree une ligne avec quantite = 1
+           - article = "FRAIS_ANNEXE" (ou "SANS_REF" s'il n'y a rien devant)
+           - designation = Le nom de la colonne ou "Frais détecté"
+           - prix_net = Le montant trouvé
+           - montant = Le montant trouvé
 
         JSON ATTENDU :
         {
             "fournisseur": "...",
             "adresse_fournisseur": "...",
-            "tva_fournisseur": "FR...",
-            "iban": "FR76...",
-            "date": "2025-03-31",
+            "tva_fournisseur": "...",
+            "iban": "...",
+            "date": "2025-01-01",
             "num_facture": "...",
             "ref_commande": "...",
             "lignes": [
-                {"quantite": 50, "article": "...", "prix_net": 2.5, "montant": 125.0, "num_bl_ligne": "BL123456"}
+                {"quantite": 1, "article": "REF123", "prix_net": 10.0, "montant": 10.0, "num_bl_ligne": "..."}
             ]
         }
         """
@@ -136,10 +137,9 @@ def traiter_un_fichier(nom_fichier, user_id):
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
-        # SAUVEGARDE AVEC USER_ID
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
-            "user_id": user_id,  # <--- ICI LE CLOISONNEMENT
+            "user_id": user_id,
             "analyse_complete": json.dumps(data_json),
             "raw_text": res.text
         }).execute()
@@ -152,14 +152,11 @@ def traiter_un_fichier(nom_fichier, user_id):
 session = login_form(url=URL_SUPABASE, apiKey=CLE_ANON)
 
 if session:
-    user_id = session["user"]["id"] # On récupère l'ID unique de l'utilisateur connecté
-    st.title("🏗️ Audit V19 - MultiUser")
+    user_id = session["user"]["id"]
+    st.title("🏗️ Audit V21 - Logique Universelle")
 
-    # --- CHARGEMENT FILTRÉ PAR USER ---
     try:
-        # 👇 LA MODIFICATION CRITIQUE EST ICI : .eq("user_id", user_id)
         res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
-        
         memoire_full = {r['file_name']: r for r in res_db.data}
         memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
     except Exception as e: 
@@ -167,7 +164,6 @@ if session:
         memoire = {}
         memoire_full = {}
 
-    # --- PROCESSING ---
     all_rows = []
     fournisseurs_detectes = set()
 
@@ -239,10 +235,8 @@ if session:
 
     df = pd.DataFrame(all_rows)
 
-    # --- TABS ---
     tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
 
-    # --- TAB 1 : CONFIG ---
     with tab_config:
         st.header("🛠️ Règles")
         
@@ -272,7 +266,6 @@ if session:
             if not edited_config.empty and "Fournisseur" in edited_config.columns:
                 config_dict = edited_config.set_index('Fournisseur').to_dict('index')
 
-    # --- TAB 2 : ANALYSE ---
     with tab_analyse:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
@@ -424,8 +417,6 @@ if session:
                         
                         if row_sel['Motif'] == "Hausse Prix":
                             st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
-                
-                # SUPPRIME : Le message bleu "Clique ici" a été retiré comme demandé
 
             else:
                 st.success("✅ Clean sheet. Aucune anomalie détectée.")
@@ -434,7 +425,6 @@ if session:
             with st.expander("📝 Données brutes (AVEC IBAN/TVA)"):
                 st.dataframe(df, use_container_width=True)
 
-    # --- TAB 3 : IMPORT (FILTRÉ PAR USER) ---
     with tab_import:
         st.header("📥 Charger")
         col_info, col_drop = st.columns([1, 2])
@@ -448,7 +438,6 @@ if session:
             st.divider()
             if st.button("🗑️ TOUT EFFACER (CE COMPTE)", type="primary"):
                 try:
-                    # 👇 MODIF : On supprime seulement les fichiers de l'utilisateur
                     supabase.table("audit_results").delete().eq("user_id", user_id).execute()
                     st.success("💥 Vos données sont vidées !")
                     time.sleep(1)
@@ -465,8 +454,6 @@ if session:
                     barre = st.progress(0)
                     status = st.empty()
                     for i, f in enumerate(uploaded):
-                        
-                        # 🛑 RALENTISSEUR : 2 secondes
                         time.sleep(2)
                         
                         if f.name in memoire and not force_rewrite:
@@ -476,7 +463,6 @@ if session:
                             status.write(f"⏳ Analyse ({i+1}/{len(uploaded)}) : **{f.name}**...")
                             try:
                                 supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                                # 👇 MODIF : On passe le user_id à la fonction
                                 ok, msg = traiter_un_fichier(f.name, user_id)
                                 if ok: st.toast(f"✅ {f.name} OK")
                                 else: st.error(f"❌ {f.name}: {msg}")
@@ -488,14 +474,12 @@ if session:
                     time.sleep(1)
                     st.rerun()
 
-    # --- TAB 4 : DATA (SCAN TOTAL) ---
     with tab_brut:
         st.header("🔍 Scan total des documents")
         if memoire_full:
             choix_file = st.selectbox("Choisir un fichier pour voir le scan complet :", list(memoire_full.keys()))
             if choix_file:
                 st.subheader(f"Texte brut extrait de : {choix_file}")
-                # Affichage sécurisé
                 raw_txt = memoire_full[choix_file].get('raw_text', 'Aucun scan disponible')
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
