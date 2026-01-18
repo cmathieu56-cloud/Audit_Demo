@@ -23,11 +23,6 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-size: 2.5rem !important; font-weight: bold; }
     .stAlert { font-weight: bold; border: 2px solid #ff4b4b; }
     div.stButton > button:first-child { font-weight: bold; }
-    div.stButton.delete-btn > button:first-child { 
-        background-color: #ff4b4b; 
-        color: white; 
-        border-color: #ff4b4b;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,30 +92,14 @@ def traiter_un_fichier(nom_fichier):
            - NUMÉRO DE COMMANDE (Ref Client / Chantier)
 
         2. TABLEAU PRODUITS :
-           Extrais ligne par ligne.
-           ⚠️ IMPORTANT : Pour chaque ligne produit, regarde juste au-dessus ou sur la même ligne si un "Bon de Livraison" (BL) est indiqué.
+           Extrais ligne par ligne (quantite, article, designation, prix_net, montant, num_bl_ligne).
            
-           Champs à extraire par ligne :
-           - quantite (nombre)
-           - article (référence)
-           - designation (description)
-           - prix_net (Prix unitaire payé tel qu'écrit)
-           - montant (Total ligne HT tel qu'écrit)
-           - num_bl_ligne (Le numéro de BL spécifique à cette ligne)
-           
-           ⚠️ IGNORE DEEE/TVA/Eco-part.
-
-        3. FRAIS CACHÉS (Pied de page) :
-           Port, Gestion, Energie... -> Crée une ligne article="FRAIS_DETECTE".
-
         JSON ATTENDU :
         {
             "fournisseur": "...",
             "date": "2025-03-31",
             "num_facture": "...",
-            "lignes": [
-                {"quantite": 50, "article": "...", "prix_net": 2.5, "montant": 125.0, "num_bl_ligne": "BL123456"}
-            ]
+            "lignes": [...]
         }
         """
         
@@ -129,9 +108,11 @@ def traiter_un_fichier(nom_fichier):
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
+        # --- MODIFICATION 1 : AJOUT DU RAW_TEXT ---
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
-            "analyse_complete": json.dumps(data_json)
+            "analyse_complete": json.dumps(data_json),
+            "raw_text": res.text  # On sauvegarde l'intégralité de la réponse IA
         }).execute()
         return True, "OK"
     except Exception as e: return False, str(e)
@@ -147,8 +128,12 @@ if session:
     # --- CHARGEMENT ---
     try:
         res_db = supabase.table("audit_results").select("*").execute()
+        # --- MODIFICATION 2 : ON GARDE TOUTES LES INFOS (dont le raw_text) ---
+        memoire_full = {r['file_name']: r for r in res_db.data}
         memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
-    except: memoire = {}
+    except: 
+        memoire = {}
+        memoire_full = {}
 
     # --- PROCESSING ---
     all_rows = []
@@ -158,7 +143,7 @@ if session:
         try:
             data = json.loads(json_str)
             fourn = data.get('fournisseur', 'INCONNU').upper()
-            date_fac = data.get('date', 'Inconnue') # DATE ENFIN LÀ
+            date_fac = data.get('date', 'Inconnue')
             num_fac = data.get('num_facture', '-')
             ref_cmd = data.get('ref_commande', '-')
 
@@ -175,19 +160,14 @@ if session:
                 p_net = clean_float(l.get('prix_net', 0))
                 num_bl = l.get('num_bl_ligne', '-')
                 
-                # 🧠 1. CALCUL DE LA QUANTITÉ RÉELLE (Correction Plaques)
                 qte_finale = qte_ia
                 if montant > 0 and p_net > 0:
-                    # On divise le Total par le PU affiché pour trouver la vraie quantité
-                    # Ex: 261.50 / 16.34 = 16.003 -> On corrige à 16
                     ratio = montant / p_net
                     if abs(ratio - round(ratio)) < 0.05: 
                          qte_math = round(ratio)
                          if qte_math != qte_ia and qte_math > 0:
                              qte_finale = qte_math
 
-                # 🧠 2. CALCUL DU PRIX SYSTÈME (Correction Câbles)
-                # On divise le Montant par la Qté Finale pour avoir le vrai prix unitaire
                 if montant > 0 and qte_finale > 0:
                     pu_systeme = montant / qte_finale
                 elif p_net > 0:
@@ -204,16 +184,16 @@ if session:
                 all_rows.append({
                     "Fichier": f_name,
                     "Facture": num_fac,
-                    "Date": date_fac, # Colonne Date
+                    "Date": date_fac,
                     "Ref_Cmd": ref_cmd,
                     "BL": num_bl,
                     "Fournisseur": fourn,
-                    "Quantité": qte_finale, # Qté Corrigée
+                    "Quantité": qte_finale,
                     "Article": article,
                     "Désignation": l.get('designation', ''),
                     "Prix Net": p_net, 
                     "Montant": montant,
-                    "PU_Systeme": pu_systeme, # Vrai Prix Unitaire
+                    "PU_Systeme": pu_systeme,
                     "Famille": famille
                 })
         except: continue
@@ -221,7 +201,7 @@ if session:
     df = pd.DataFrame(all_rows)
 
     # --- TABS ---
-    tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 DATA"])
+    tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
 
     # --- TAB 1 : CONFIG ---
     with tab_config:
@@ -259,7 +239,6 @@ if session:
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
                 if not df_clean.empty:
-                    # On compare sur la base du PU_Systeme (le vrai prix calculé)
                     best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
                     ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date']].to_dict('index')
 
@@ -310,7 +289,6 @@ if session:
                         perte = ecart_u * row['Quantité']
                         cible = best_price
                         motif = "Hausse Prix"
-                        # DATE DANS LA SOURCE CIBLE
                         source_cible = f"{best_date}"
                         detail_tech = f"Meilleur: {best_price:.3f}€ (Facture {best_fac})"
 
@@ -347,118 +325,37 @@ if session:
                     st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
 
                 with c_podium:
-                    selection_podium = st.dataframe(
-                        stats_fourn, 
-                        use_container_width=True, 
-                        hide_index=True,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        column_config={
-                            "Total_Perte": st.column_config.NumberColumn("Total à Réclamer", format="%.2f €"),
-                        }
-                    )
+                    selection_podium = st.dataframe(stats_fourn, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row")
 
                 if selection_podium.selection.rows:
                     idx_podium = selection_podium.selection.rows[0]
                     fourn_selected = stats_fourn.iloc[idx_podium]['Fournisseur']
-                    
-                    st.divider()
                     st.subheader(f"📉 Preuves pour : {fourn_selected}")
                     df_final = df_ano[df_ano['Fournisseur'] == fourn_selected]
-
-                    selection_detail = st.dataframe(
-                        df_final,
-                        use_container_width=True,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        hide_index=True,
-                        column_order=["Date Facture", "Qte", "Ref", "Désignation", "Payé (U)", "Cible (U)", "Perte", "Motif"],
-                        column_config={
-                            "Date Facture": st.column_config.TextColumn("Date", width="small"),
-                            "Qte": st.column_config.NumberColumn("Qte", format="%.0f", width="small"),
-                            "Ref": st.column_config.TextColumn("Ref", width="small"),
-                            "Payé (U)": st.column_config.NumberColumn("Payé (Calc)", format="%.3f €"),
-                            "Cible (U)": st.column_config.NumberColumn("Cible", format="%.3f €"),
-                            "Perte": st.column_config.NumberColumn("Perte", format="%.2f €"),
-                            "Désignation": st.column_config.TextColumn("Désignation", width="medium"),
-                            "Source Cible": None
-                        }
-                    )
-                    
-                    if selection_detail.selection.rows:
-                        idx_det = selection_detail.selection.rows[0]
-                        row_sel = df_final.iloc[idx_det]
-                        
-                        st.info(f"🔎 **{row_sel['Ref']}**")
-                        c1, c2, c3 = st.columns(3)
-                        c1.metric("Prix Payé (Calc)", f"{row_sel['Payé (U)']:.3f} €")
-                        c2.metric("Meilleur Prix", f"{row_sel['Cible (U)']:.3f} €")
-                        c3.metric("Perte", f"{row_sel['Perte']:.2f} €")
-                        
-                        st.markdown("---")
-                        st.write("🤠 **PIÈCES À CONVICTION :**")
-                        st.write(f"📄 **Facture N° :** `{row_sel['Num Facture']}` (du {row_sel['Date Facture']})")
-                        st.write(f"🚚 **Bon de Livraison :** `{row_sel['BL']}`")
-                        st.write(f"🏗️ **Réf Chantier :** `{row_sel['Ref_Cmd']}`")
-                        
-                        if row_sel['Motif'] == "Hausse Prix":
-                            st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
-                
-                elif not stats_fourn.empty:
-                    st.info("👈 Clique sur un fournisseur.")
+                    st.dataframe(df_final, use_container_width=True, hide_index=True)
 
             else:
                 st.success("✅ Clean sheet.")
 
-            st.divider()
-            with st.expander("📝 Données brutes"):
-                st.dataframe(df, use_container_width=True)
-
     # --- TAB 3 : IMPORT ---
     with tab_import:
         st.header("📥 Charger")
-        col_info, col_drop = st.columns([1, 2])
-        with col_info:
-            st.write("📂 **En mémoire :**")
-            if memoire:
-                st.dataframe(pd.DataFrame({"Fichiers": list(memoire.keys())}), hide_index=True, height=300)
-            else:
-                st.info("Vide")
-            
-            st.divider()
-            if st.button("🗑️ TOUT EFFACER (RAZ BASE)", type="primary"):
-                try:
-                    supabase.table("audit_results").delete().neq("file_name", "0").execute()
-                    st.success("💥 Base de données vidée !")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erreur : {e}")
+        uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
+        if uploaded and st.button("🚀 LANCER"):
+            for f in uploaded:
+                supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
+                traiter_un_fichier(f.name)
+            st.rerun()
 
-        with col_drop:
-            uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
-            force_rewrite = st.checkbox("⚠️ Écraser doublons (Forcer ré-analyse)", value=False)
-            
-            if uploaded and st.button("🚀 LANCER"):
-                barre = st.progress(0)
-                status = st.empty()
-                for i, f in enumerate(uploaded):
-                    if f.name in memoire and not force_rewrite:
-                        status.warning(f"⚠️ {f.name} ignoré.")
-                        time.sleep(0.5)
-                    else:
-                        status.write(f"⏳ Analyse : **{f.name}**...")
-                        supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                        ok, msg = traiter_un_fichier(f.name)
-                        if ok: st.toast(f"✅ {f.name} OK")
-                        else: st.toast(f"❌ {f.name}: {msg}")
-                    barre.progress((i + 1) / len(uploaded))
-                status.success("✅ Terminé !")
-                time.sleep(1)
-                st.rerun()
-
-    # --- TAB 4 : DATA ---
+    # --- TAB 4 : SCAN TOTAL ---
     with tab_brut:
-
-        st.json(memoire)
-
+        st.header("🔍 Scan total des documents")
+        # --- MODIFICATION 3 : AFFICHAGE DU TEXTE COMPLET ---
+        if memoire_full:
+            choix_file = st.selectbox("Choisir un fichier pour voir le scan complet :", list(memoire_full.keys()))
+            if choix_file:
+                st.subheader(f"Texte brut extrait de : {choix_file}")
+                # Affiche le contenu de la colonne raw_text
+                st.text_area("Résultat Gemini (Full Scan)", memoire_full[choix_file].get('raw_text', 'Aucun scan disponible'), height=500)
+        else:
+            st.info("Aucune donnée disponible.")
