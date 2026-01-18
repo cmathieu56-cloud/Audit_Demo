@@ -11,9 +11,9 @@ from io import BytesIO
 # ==============================================================================
 # 1. CONFIGURATION & CONNEXIONS
 # ==============================================================================
-URL_SUPABASE = "https://ozeockanshlsjchroeen.supabase.co"
-CLE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96ZW9ja2Fuc2hsc2pjaHJvZWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1MDY2MTQsImV4cCI6MjA4NDA4MjYxNH0.prjW0U3BM4Eocz-M4GdsSirZqrWIN7rjIBY1P2p-zps"
-GEMINI_API_KEY = "AIzaSyCMH31df2IzNPSgJ2yETS8pK57GsM7l3Dw"
+URL_SUPABASE = st.secrets["SUPABASE_URL"]
+CLE_ANON = st.secrets["SUPABASE_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 st.set_page_config(page_title="Audit V18 - Prod", page_icon="🏗️", layout="wide")
 
@@ -461,3 +461,4 @@ if session:
     with tab_brut:
 
         st.json(memoire)
+
