@@ -12,7 +12,7 @@ from io import BytesIO
 # 1. CONFIGURATION & CONNEXIONS
 # ==============================================================================
 URL_SUPABASE = "https://ozeockanshlsjchroeen.supabase.co"
-CLE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96ZW9ja2Fuc2hsc2pjaHJvZWVuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODUwNjYxNCwiZXhwIjoyMDg0MDgyNjE0fQ.8iGhwypYNK_ckoeHMwy4N1VpQcHQXmNStw6yWohITRA"
+CLE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96ZW9ja2Fuc2hsc2pjaHJvZWVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1MDY2MTQsImV4cCI6MjA4NDA4MjYxNH0.prjW0U3BM4Eocz-M4GdsSirZqrWIN7rjIBY1P2p-zps"
 GEMINI_API_KEY = "AIzaSyCMH31df2IzNPSgJ2yETS8pK57GsM7l3Dw"
 
 st.set_page_config(page_title="Audit V18 - Prod", page_icon="🏗️", layout="wide")
@@ -459,4 +459,5 @@ if session:
 
     # --- TAB 4 : DATA ---
     with tab_brut:
+
         st.json(memoire)
