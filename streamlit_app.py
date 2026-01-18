@@ -8,7 +8,7 @@ import json
 import time
 
 # ==============================================================================
-# 1. CONFIGURATION & CONNEXIONS
+# 1. CONFIGURATION
 # ==============================================================================
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
@@ -23,29 +23,15 @@ except Exception as e:
     st.error(f"Erreur connexion : {e}")
 
 # ==============================================================================
-# 2. FONCTIONS
+# 2. LOGIQUE MÉTIER
 # ==============================================================================
 
 def clean_float(val):
     if isinstance(val, (float, int)): return float(val)
     if not isinstance(val, str): return 0.0
-    val = val.replace(' ', '').replace('€', '').replace('EUR', '')
-    val = val.replace(',', '.')
+    val = val.replace(' ', '').replace('€', '').replace('EUR', '').replace(',', '.')
     try: return float(val)
     except: return 0.0
-
-def detecter_famille(label, ref=""):
-    label_up = str(label).upper()
-    if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT"]): return "FRAIS PORT"
-    if any(x in label_up for x in ["GESTION", "ADMIN"]): return "FRAIS GESTION"
-    return "PRODUIT"
-
-def extraire_json_robuste(texte):
-    try:
-        match = re.search(r"(\{.*\})", texte, re.DOTALL)
-        if match: return json.loads(match.group(1))
-    except: pass
-    return None
 
 def traiter_un_fichier(nom_fichier):
     try:
@@ -53,13 +39,14 @@ def traiter_un_fichier(nom_fichier):
         model = genai.GenerativeModel("gemini-2.0-flash")
         prompt = "Analyse cette facture et donne le JSON : fournisseur, date, num_facture, lignes (quantite, article, designation, prix_net, montant)."
         res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
-        data_json = extraire_json_robuste(res.text)
-        if data_json:
-            supabase.table("audit_results").upsert({
-                "file_name": nom_fichier,
-                "analyse_complete": json.dumps(data_json),
-                "raw_text": res.text 
-            }).execute()
+        data_json = json.loads(re.search(r"(\{.*\})", res.text, re.DOTALL).group(1))
+        
+        # SAUVEGARDE AVEC SCAN TOTAL
+        supabase.table("audit_results").upsert({
+            "file_name": nom_fichier,
+            "analyse_complete": json.dumps(data_json),
+            "raw_text": res.text 
+        }).execute()
         return True, "OK"
     except Exception as e: return False, str(e)
 
@@ -75,64 +62,52 @@ if session:
         res_db = supabase.table("audit_results").select("*").execute()
         memoire_full = {r['file_name']: r for r in res_db.data}
         memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
-    except: 
-        memoire, memoire_full = {}, {}
+    except: memoire, memoire_full = {}, {}
 
+    # Extraction des données pour le tableau
     all_rows = []
-    fournisseurs_detectes = set()
-
     for f_name, json_str in memoire.items():
         try:
             data = json.loads(json_str)
-            fourn = data.get('fournisseur', 'INCONNU').upper()
-            fournisseurs_detectes.add(fourn)
             for l in data.get('lignes', []):
-                qte = clean_float(l.get('quantite', 1))
-                montant = clean_float(l.get('montant', 0))
                 all_rows.append({
-                    "Fichier": f_name, "Fournisseur": fourn, "Quantité": qte,
-                    "Article": l.get('article', 'SANS_REF'), "Désignation": l.get('designation', ''),
-                    "PU_Systeme": montant/qte if (montant > 0 and qte > 0) else 0,
-                    "Famille": detecter_famille(l.get('designation', ''))
+                    "Fichier": f_name, "Fournisseur": data.get('fournisseur', '?'),
+                    "Article": l.get('article', '?'), "Montant": clean_float(l.get('montant', 0))
                 })
         except: continue
-
     df = pd.DataFrame(all_rows)
+
     tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIG", "📊 ANALYSE", "📥 IMPORT", "🔍 SCAN TOTAL"])
-
-    with tab_config:
-        st.header("🛠️ Règles")
-        # FIX : On force la création des colonnes même si c'est vide
-        if 'config_df' not in st.session_state:
-            st.session_state['config_df'] = pd.DataFrame(columns=["Fournisseur", "Franco (Seuil €)", "Max Gestion (€)"])
-        
-        edited_config = st.data_editor(st.session_state['config_df'], num_rows="dynamic", use_container_width=True)
-        st.session_state['config_df'] = edited_config
-        
-        # FIX : On vérifie que la table n'est pas vide avant de l'utiliser
-        config_dict = {}
-        if not edited_config.empty and "Fournisseur" in edited_config.columns:
-            config_dict = edited_config.set_index('Fournisseur').to_dict('index')
-
-    with tab_analyse:
-        if df.empty: st.info("Charge des factures dans l'onglet IMPORT.")
-        else: st.dataframe(df, use_container_width=True)
 
     with tab_import:
         c1, c2 = st.columns([1, 2])
         with c1:
-            if st.button("🗑️ RAZ BASE", type="primary"):
+            st.write("📂 **Fichiers en base :**", len(memoire))
+            st.divider()
+            if st.button("🗑️ TOUT EFFACER (RAZ)", type="primary"):
                 supabase.table("audit_results").delete().neq("file_name", "0").execute()
                 st.rerun()
+        
         with c2:
             uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
             if uploaded and st.button("🚀 LANCER"):
-                for f in uploaded:
+                # RETOUR DE LA BARRE DE PROGRESSION ET DU STATUT
+                barre = st.progress(0)
+                status = st.empty()
+                for i, f in enumerate(uploaded):
+                    status.write(f"⏳ Analyse en cours : **{f.name}**...")
                     supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                    traiter_un_fichier(f.name)
+                    ok, msg = traiter_un_fichier(f.name)
+                    barre.progress((i + 1) / len(uploaded))
+                status.success("✅ Traitement terminé !")
+                time.sleep(1)
                 st.rerun()
 
     with tab_brut:
+        st.header("🔍 Scan total")
         if memoire_full:
-            choix = st.selectbox("Fichier :", list(memoire_full.keys()))
-            if choix: st.text_area("Scan complet", memoire_full[choix].get('raw_text', ''), height=500)
+            choix = st.selectbox("Choisir un fichier :", list(memoire_full.keys()))
+            if choix: st.text_area("Texte brut Gemini", memoire_full[choix].get('raw_text', ''), height=500)
+
+    with tab_analyse:
+        st.dataframe(df, use_container_width=True)
