@@ -9,7 +9,7 @@ import time
 from io import BytesIO
 
 # ==============================================================================
-# 1. CONFIGURATION & CONNEXIONS
+# 1. CONFIGURATION
 # ==============================================================================
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
@@ -38,7 +38,7 @@ except Exception as e:
     st.error(f"Erreur connexion : {e}")
 
 # ==============================================================================
-# 2. INTELLIGENCE MÉTIER (LE CERVEAU EST DE RETOUR)
+# 2. LOGIQUE MÉTIER
 # ==============================================================================
 
 def clean_float(val):
@@ -87,7 +87,6 @@ def traiter_un_fichier(nom_fichier):
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         model = genai.GenerativeModel("gemini-2.0-flash")
         
-        # PROMPT COMPLET RESTAURÉ
         prompt = """
         Analyse cette facture.
         
@@ -130,7 +129,7 @@ def traiter_un_fichier(nom_fichier):
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
-        # SAUVEGARDE (AVEC LE SCAN TOTAL)
+        # SAUVEGARDE COMPLETE (Raw Text + JSON)
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
             "analyse_complete": json.dumps(data_json),
@@ -140,7 +139,7 @@ def traiter_un_fichier(nom_fichier):
     except Exception as e: return False, str(e)
 
 # ==============================================================================
-# 3. INTERFACE
+# 3. INTERFACE PRINCIPALE
 # ==============================================================================
 session = login_form(url=URL_SUPABASE, apiKey=CLE_ANON)
 
@@ -156,7 +155,7 @@ if session:
         memoire = {}
         memoire_full = {}
 
-    # --- PROCESSING (CALCULS COMPLEXES RESTAURÉS) ---
+    # --- PROCESSING ---
     all_rows = []
     fournisseurs_detectes = set()
 
@@ -181,7 +180,7 @@ if session:
                 p_net = clean_float(l.get('prix_net', 0))
                 num_bl = l.get('num_bl_ligne', '-')
                 
-                # 🧠 LOGIQUE INTELLIGENTE (Correction Plaques/Câbles)
+                # Correction intelligente Quantité/Prix
                 qte_finale = qte_ia
                 if montant > 0 and p_net > 0:
                     ratio = montant / p_net
@@ -239,7 +238,6 @@ if session:
         if 'config_df' not in st.session_state:
             st.session_state['config_df'] = pd.DataFrame(default_data)
         
-        # Mise à jour auto des fournisseurs
         if 'Fournisseur' in st.session_state['config_df'].columns:
             current_suppliers = st.session_state['config_df']['Fournisseur'].unique()
             for f in fournisseurs_detectes:
@@ -256,226 +254,9 @@ if session:
             if not edited_config.empty and "Fournisseur" in edited_config.columns:
                 config_dict = edited_config.set_index('Fournisseur').to_dict('index')
 
-    # --- TAB 2 : ANALYSE (PODIUM RESTAURÉ) ---
+    # --- TAB 2 : ANALYSE ---
     with tab_analyse:
         if df.empty:
             st.warning("⚠️ Aucune donnée. Importez des factures dans l'onglet IMPORT.")
         else:
-            df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
-            ref_map = {}
-            if not df_produits.empty:
-                df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
-                if not df_clean.empty:
-                    best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
-                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date']].to_dict('index')
-
-            facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
-            anomalies = []
-
-            for idx, row in df.iterrows():
-                f_name = row['Fichier']
-                num_facture = row['Facture']
-                fourn = row['Fournisseur']
-                
-                # Récupération règles sécurisée
-                rules = config_dict.get(fourn, {"Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0})
-                seuil_franco = rules.get("Franco (Seuil €)", 0.0)
-                max_gestion = rules.get("Max Gestion (€)", 0.0)
-                
-                perte = 0
-                motif = ""
-                cible = 0.0 
-                source_cible = "-"
-                detail_tech = ""
-
-                if row['Famille'] == 'FRAIS PORT':
-                    total_fac = facture_totals.get(f_name, 0)
-                    if seuil_franco > 0 and total_fac >= seuil_franco:
-                        perte = row['Montant']
-                        cible = 0.0
-                        motif = "Hors Franco"
-                        detail_tech = f"Total commande {total_fac}€ > Seuil {seuil_franco}€"
-                    elif seuil_franco == 0:
-                        perte = row['Montant']
-                        cible = 0.0
-                        motif = "Port Facturé"
-                        detail_tech = "Config réglée à 0€"
-
-                elif row['Famille'] == 'FRAIS GESTION':
-                    if row['Montant'] > max_gestion:
-                        perte = row['Montant'] - max_gestion
-                        cible = max_gestion
-                        motif = "Frais Abusifs"
-
-                elif row['Article'] in ref_map and row['Famille'] not in ['FRAIS PORT', 'FRAIS GESTION', 'TAXE']:
-                    best_info = ref_map[row['Article']]
-                    best_price = best_info['PU_Systeme']
-                    best_fac = best_info['Facture']
-                    best_date = best_info.get('Date', '?')
-                    
-                    if row['PU_Systeme'] > best_price + 0.005:
-                        ecart_u = row['PU_Systeme'] - best_price
-                        perte = ecart_u * row['Quantité']
-                        cible = best_price
-                        motif = "Hausse Prix"
-                        source_cible = f"{best_date}"
-                        detail_tech = f"Meilleur: {best_price:.3f}€ (Facture {best_fac})"
-
-                if perte > 0.01:
-                    anomalies.append({
-                        "Fournisseur": fourn,
-                        "Qte": row['Quantité'],
-                        "Ref": row['Article'],
-                        "Payé (U)": row['PU_Systeme'],
-                        "Cible (U)": cible,
-                        "Source Cible": source_cible,
-                        "Perte": perte,
-                        "Motif": motif,
-                        "Désignation": row['Désignation'],
-                        "Num Facture": num_facture,
-                        "Date Facture": row['Date'],
-                        "Ref_Cmd": row['Ref_Cmd'],
-                        "BL": row['BL'],
-                        "Détails Techniques": detail_tech
-                    })
-
-            if anomalies:
-                df_ano = pd.DataFrame(anomalies)
-                total_perte = df_ano['Perte'].sum()
-
-                st.subheader("🏆 Podium des Dettes")
-                stats_fourn = df_ano.groupby('Fournisseur').agg(
-                    Nb_Erreurs=('Perte', 'count'),
-                    Total_Perte=('Perte', 'sum')
-                ).reset_index().sort_values('Total_Perte', ascending=False)
-                
-                c_podium, c_metric = st.columns([2, 1])
-                with c_metric:
-                    st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
-
-                with c_podium:
-                    selection_podium = st.dataframe(
-                        stats_fourn, 
-                        use_container_width=True, 
-                        hide_index=True,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        column_config={
-                            "Total_Perte": st.column_config.NumberColumn("Total à Réclamer", format="%.2f €"),
-                        }
-                    )
-
-                if selection_podium.selection.rows:
-                    idx_podium = selection_podium.selection.rows[0]
-                    fourn_selected = stats_fourn.iloc[idx_podium]['Fournisseur']
-                    
-                    st.divider()
-                    st.subheader(f"📉 Preuves pour : {fourn_selected}")
-                    df_final = df_ano[df_ano['Fournisseur'] == fourn_selected]
-
-                    selection_detail = st.dataframe(
-                        df_final,
-                        use_container_width=True,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        hide_index=True,
-                        column_order=["Date Facture", "Qte", "Ref", "Désignation", "Payé (U)", "Cible (U)", "Perte", "Motif"],
-                        column_config={
-                            "Date Facture": st.column_config.TextColumn("Date", width="small"),
-                            "Qte": st.column_config.NumberColumn("Qte", format="%.0f", width="small"),
-                            "Ref": st.column_config.TextColumn("Ref", width="small"),
-                            "Payé (U)": st.column_config.NumberColumn("Payé (Calc)", format="%.3f €"),
-                            "Cible (U)": st.column_config.NumberColumn("Cible", format="%.3f €"),
-                            "Perte": st.column_config.NumberColumn("Perte", format="%.2f €"),
-                            "Désignation": st.column_config.TextColumn("Désignation", width="medium"),
-                        }
-                    )
-                    
-                    if selection_detail.selection.rows:
-                        idx_det = selection_detail.selection.rows[0]
-                        row_sel = df_final.iloc[idx_det]
-                        
-                        st.info(f"🔎 **{row_sel['Ref']}**")
-                        c1, c2, c3 = st.columns(3)
-                        c1.metric("Prix Payé (Calc)", f"{row_sel['Payé (U)']:.3f} €")
-                        c2.metric("Meilleur Prix", f"{row_sel['Cible (U)']:.3f} €")
-                        c3.metric("Perte", f"{row_sel['Perte']:.2f} €")
-                        
-                        st.markdown("---")
-                        st.write("🤠 **PIÈCES À CONVICTION :**")
-                        st.write(f"📄 **Facture N° :** `{row_sel['Num Facture']}` (du {row_sel['Date Facture']})")
-                        st.write(f"🚚 **Bon de Livraison :** `{row_sel['BL']}`")
-                        st.write(f"🏗️ **Réf Chantier :** `{row_sel['Ref_Cmd']}`")
-                        
-                        if row_sel['Motif'] == "Hausse Prix":
-                            st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
-                
-                elif not stats_fourn.empty:
-                    st.info("👈 Clique sur un fournisseur pour voir les preuves.")
-
-            else:
-                st.success("✅ Clean sheet. Aucune anomalie détectée.")
-            
-            st.divider()
-            with st.expander("📝 Données brutes"):
-                st.dataframe(df, use_container_width=True)
-
-    # --- TAB 3 : IMPORT (BARRE PROGRESSION RESTAURÉE) ---
-    with tab_import:
-        st.header("📥 Charger")
-        col_info, col_drop = st.columns([1, 2])
-        with col_info:
-            st.write("📂 **En mémoire :**")
-            if memoire:
-                st.dataframe(pd.DataFrame({"Fichiers": list(memoire.keys())}), hide_index=True, height=300)
-            else:
-                st.info("Vide")
-            
-            st.divider()
-            if st.button("🗑️ TOUT EFFACER (RAZ BASE)", type="primary"):
-                try:
-                    supabase.table("audit_results").delete().neq("file_name", "0").execute()
-                    st.success("💥 Base de données vidée !")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erreur : {e}")
-
-        with col_drop:
-            uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
-            force_rewrite = st.checkbox("⚠️ Écraser doublons (Forcer ré-analyse)", value=False)
-            
-            if uploaded and st.button("🚀 LANCER"):
-                barre = st.progress(0)
-                status = st.empty()
-                for i, f in enumerate(uploaded):
-                    if f.name in memoire and not force_rewrite:
-                        status.warning(f"⚠️ {f.name} ignoré (déjà présent).")
-                        time.sleep(0.5)
-                    else:
-                        status.write(f"⏳ Analyse : **{f.name}**...")
-                        try:
-                            supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                            ok, msg = traiter_un_fichier(f.name)
-                            if ok: st.toast(f"✅ {f.name} OK")
-                            else: st.error(f"❌ {f.name}: {msg}")
-                        except Exception as up_err:
-                            st.error(f"Erreur Upload {f.name}: {up_err}")
-                            
-                    barre.progress((i + 1) / len(uploaded))
-                status.success("✅ Terminé !")
-                time.sleep(1)
-                st.rerun()
-
-    # --- TAB 4 : DATA (SCAN TOTAL) ---
-    with tab_brut:
-        st.header("🔍 Scan total des documents")
-        if memoire_full:
-            choix_file = st.selectbox("Choisir un fichier pour voir le scan complet :", list(memoire_full.keys()))
-            if choix_file:
-                st.subheader(f"Texte brut extrait de : {choix_file}")
-                # Affichage sécurisé même si la colonne est vide
-                raw_txt = memoire_full[choix_file].get('raw_text', 'Aucun scan disponible (Colonne vide ou ancienne analyse)')
-                st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
-        else:
-            st.info("Aucune donnée enregistrée.")
+            df_produits = df[~df['
