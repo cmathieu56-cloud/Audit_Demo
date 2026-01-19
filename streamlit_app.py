@@ -106,31 +106,24 @@ def traiter_un_fichier(nom_fichier, user_id):
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         
-        # 1. On utilise le modèle qui "réfléchit" (Thinking)
+        # On utilise le cerveau "Thinking" pour éviter les erreurs de lecture brute
         model = genai.GenerativeModel("gemini-2.0-flash-thinking-exp")
         
-        # 2. Le mode d'emploi avec tes noms de cases exacts
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
         Utilise ta capacité de raisonnement pour valider chaque chiffre.
 
-        1. INFOS ENTREPRISE & SÉCURITÉ :
-           - Fournisseur (Nom complet), Adresse, TVA, IBAN, Date, Numéro Facture.
-           - Numéro Commande : Cherche "V/Réf", "Chantier". Si vide, mets "-".
+        1. INFOS ENTREPRISE :
+           - Fournisseur, Adresse, TVA, IBAN, Date, Numéro Facture.
+           - Numéro Commande : Cherche "V/Réf", "Chantier". Sinon, mets "-".
 
-        2. EXTRACTION DES LIGNES (RÈGLES CRITIQUES) :
-           - Extrais le tableau principal avec ces colonnes précises :
-             * quantite : Le nombre d'unités. 🚨 RÈGLE D'OR : Calcule (Montant / Prix Net) pour vérifier ce chiffre.
-             * article : La référence technique.
-             * designation : Le nom du produit.
-             * prix_brut : Le prix catalogue (garde le slash /100 si présent).
-             * remise : Le pourcentage de remise.
-             * prix_net : Le prix payé (garde le slash /100 si présent).
-             * montant : Le total HT de la ligne.
-             * num_bl_ligne : Le numéro de BL.
+        2. LIGNES (RÈGLES CRITIQUES) :
+           - Extrais : quantite, article, designation, prix_brut, remise, prix_net, montant, num_bl_ligne.
+           🚨 RÈGLE D'OR : Le modèle doit vérifier mathématiquement que (Prix Net * Quantité) = Montant.
+           🚨 Spécificité : Garde les prix au cent (ex: /100) si présents.
 
         3. FRAIS CACHÉS :
-           - Scanne la zone TVA pour "FF" ou "Port". Si trouvé, crée une ligne avec article = "FRAIS_ANNEXE".
+           - Scanne le bas de page pour "FF" ou "Port". Crée une ligne FRAIS_ANNEXE si besoin.
 
         JSON ATTENDU :
         {
@@ -156,14 +149,14 @@ def traiter_un_fichier(nom_fichier, user_id):
         }
         """
         
-        # 3. On envoie le tout à Gemini
+        # Cette ligne était celle qui bloquait (maintenant bien alignée)
         res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
         if not res.text: return False, "Vide"
         
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
-        # CORRECTIF : Si Facture = Commande, on efface !
+        # Correctif si l'IA confond Facture et Commande
         n_fac = data_json.get('num_facture', '').strip()
         n_cmd = data_json.get('ref_commande', '').strip()
         if n_fac and n_cmd and (n_fac in n_cmd or n_cmd in n_fac):
@@ -176,7 +169,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             "raw_text": res.text
         }).execute()
         return True, "OK"
-    except Exception as e: return False, str(e)
+    except Exception as e: return False, str(e))
         
         res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
         if not res.text: return False, "Vide"
@@ -574,6 +567,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
