@@ -406,9 +406,20 @@ if session:
                         detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
-                    # Calcul de la remise nécessaire pour atteindre la cible
-                    p_brut_numeric = clean_float(str(row['Prix Brut']).split('/')[0])
-                    rem_cible = (1 - (cible / p_brut_numeric)) * 100 if p_brut_numeric > 0 else 0
+                    # 1. On retrouve le coefficient net (ex: "60+10" -> 0.36)
+                    remise_str = str(row['Remise']).replace('%', '').strip()
+                    coef_net = 1.0
+                    for part in remise_str.split('+'):
+                        try:
+                            val = float(part.strip())
+                            coef_net *= (1 - val/100)
+                        except: pass
+                    
+                    # 2. On calcule le Brut Unitaire théorique : Net / Coef
+                    p_brut_unitaire = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
+                    
+                    # 3. Calcul de la Remise Cible
+                    rem_cible = (1 - (cible / p_brut_unitaire)) * 100 if p_brut_unitaire > 0 else 0
                     
                     anomalies.append({
                         "Fournisseur": fourn,
@@ -584,6 +595,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
