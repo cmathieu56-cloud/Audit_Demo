@@ -411,7 +411,7 @@ if session:
                         detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
-                    # 1. On retrouve le coefficient net (ex: "60+10" -> 0.36)
+                    # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
                     remise_str = str(row['Remise']).replace('%', '').strip()
                     coef_net = 1.0
                     for part in remise_str.split('+'):
@@ -420,19 +420,35 @@ if session:
                             coef_net *= (1 - val/100)
                         except: pass
                     
-                    # 2. On calcule le Brut Unitaire théorique : Net / Coef
-                    p_brut_unitaire = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
+                    # On retrouve le prix catalogue unitaire théorique
+                    p_brut_unitaire_calc = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
+                    rem_cible = (1 - (cible / p_brut_unitaire_calc)) * 100 if p_brut_unitaire_calc > 0 else 0
+
+                    # --- 2. Nettoyage Visuel du Prix Brut (Gestion des /100, /1000) ---
+                    prix_brut_affiche = row['Prix Brut']
+                    raw_brut_str = str(row['Prix Brut'])
                     
-                    # 3. Calcul de la Remise Cible
-                    rem_cible = (1 - (cible / p_brut_unitaire)) * 100 if p_brut_unitaire > 0 else 0
-                    
+                    if '/' in raw_brut_str:
+                        try:
+                            parts = raw_brut_str.split('/')
+                            # On nettoie la partie gauche (le prix) et droite (le diviseur)
+                            val_b = float(parts[0].replace(' ', '').replace(',', '.').strip())
+                            div_b = float(parts[1].replace(' ', '').replace(',', '.').strip())
+                            
+                            if div_b > 0:
+                                # On effectue la division pour l'affichage
+                                prix_brut_affiche = val_b / div_b
+                        except:
+                            # En cas d'erreur de lecture, on laisse le texte d'origine
+                            pass
+
                     anomalies.append({
                         "Fournisseur": fourn,
                         "BL": row['BL'], 
                         "Famille": row['Famille'],
                         "PU_Systeme": row['PU_Systeme'],
                         "Montant": row['Montant'],
-                        "Prix Brut": row['Prix Brut'],
+                        "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
                         "Remise Cible": f"{rem_cible:.1f}%",
                         "Qte": row['Quantité'],
@@ -600,6 +616,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
