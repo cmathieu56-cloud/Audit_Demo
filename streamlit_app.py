@@ -424,23 +424,28 @@ if session:
                     p_brut_unitaire_calc = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
                     rem_cible = (1 - (cible / p_brut_unitaire_calc)) * 100 if p_brut_unitaire_calc > 0 else 0
 
-                    # --- 2. Nettoyage Visuel du Prix Brut (Gestion des /100, /1000) ---
+                    # --- 2. Nettoyage et Formatage du Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
                     raw_brut_str = str(row['Prix Brut'])
                     
+                    # Gestion de la division (ex: /1000)
                     if '/' in raw_brut_str:
                         try:
                             parts = raw_brut_str.split('/')
-                            # On nettoie la partie gauche (le prix) et droite (le diviseur)
                             val_b = float(parts[0].replace(' ', '').replace(',', '.').strip())
                             div_b = float(parts[1].replace(' ', '').replace(',', '.').strip())
-                            
                             if div_b > 0:
-                                # On effectue la division pour l'affichage
                                 prix_brut_affiche = val_b / div_b
-                        except:
-                            # En cas d'erreur de lecture, on laisse le texte d'origine
-                            pass
+                        except: pass
+                    
+                    # Formatage strict à 2 décimales (ex: 1.72)
+                    try:
+                        # On s'assure que c'est un nombre avant de formater
+                        val_float = float(str(prix_brut_affiche).replace(' ', '').replace(',', '.'))
+                        prix_brut_affiche = f"{val_float:.2f}"
+                    except:
+                        # Si ce n'est pas un nombre, on laisse tel quel
+                        pass
 
                     anomalies.append({
                         "Fournisseur": fourn,
@@ -450,7 +455,7 @@ if session:
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
-                        "Remise Cible": f"{rem_cible:.1f}%",
+                        "Remise Cible": f"{rem_cible:.1f}",
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
@@ -616,6 +621,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
