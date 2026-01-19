@@ -78,7 +78,8 @@ def detecter_famille(label, ref=""):
 
         # 3. FRAIS DE PORT (On exclut le mot SUPPORT pour éviter l'erreur)
     keywords_port = ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]
-    if any(x in label_up for x in keywords_port) and "SUPPORT" not in label_up: 
+    exclusions_port = ["SUPPORT", "SUPORT"]
+    if any(x in label_up for x in keywords_port) and not any(ex in label_up for ex in exclusions_port): 
         return "FRAIS PORT"
     if "EMBALLAGE" in label_up: return "EMBALLAGE"
 
@@ -557,6 +558,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
