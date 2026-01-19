@@ -411,24 +411,24 @@ if session:
                         detail_tech = f"(Facture {best_fac})"
 
                     if perte > 0.01:
-                        # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
-                        remise_str = str(row['Remise']).replace('%', '').strip()
-                        coef_net = 1.0
-                        for part in remise_str.split('+'):
-                            try:
-                                val = float(part.strip())
-                                coef_net *= (1 - val/100)
-                            except: pass
-                        
-                        # On retrouve le prix catalogue unitaire théorique
-                        p_brut_unitaire_calc = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
-                        rem_cible = (1 - (cible / p_brut_unitaire_calc)) * 100 if p_brut_unitaire_calc > 0 else 0
-    
-                        # --- 2. Nettoyage et Formatage du Prix Brut ---
-                        prix_brut_affiche = row['Prix Brut']
-                        raw_brut_str = str(row['Prix Brut'])
-                        
-                        # Gestion de la division (ex: /1000)
+                    # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
+                    remise_str = str(row['Remise']).replace('%', '').strip()
+                    coef_net = 1.0
+                    for part in remise_str.split('+'):
+                        try:
+                            val = float(part.strip())
+                            coef_net *= (1 - val/100)
+                        except: pass
+                    
+                    # On retrouve le prix catalogue unitaire théorique
+                    p_brut_unitaire_calc = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
+                    rem_cible = (1 - (cible / p_brut_unitaire_calc)) * 100 if p_brut_unitaire_calc > 0 else 0
+
+                    # --- 2. Nettoyage et Formatage du Prix Brut ---
+                    prix_brut_affiche = row['Prix Brut']
+                    raw_brut_str = str(row['Prix Brut'])
+                    
+                    # Gestion de la division (ex: /1000)
                     if '/' in raw_brut_str:
                         try:
                             parts = raw_brut_str.split('/')
@@ -446,7 +446,7 @@ if session:
 
                     anomalies.append({
                         "Fournisseur": fourn,
-                        "Num Facture": row['Facture'], # <-- Ligne réintégrée pour corriger le KeyError
+                        "Num Facture": row['Facture'],
                         "BL": row['BL'], 
                         "Famille": row['Famille'],
                         "PU_Systeme": row['PU_Systeme'],
@@ -463,6 +463,7 @@ if session:
                         "Motif": motif,
                         "Date Facture": row['Date']
                     })
+                    
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
@@ -618,6 +619,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
