@@ -426,7 +426,7 @@ if session:
 
                     # --- 2. Nettoyage et Formatage du Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
-                    raw_brut_str = str(row['Prix Brut'])
+                    raw_brut_str = str(row['Prix Brut'])  # Variable indispensable définie ici
                     
                     # Gestion de la division (ex: /1000)
                     if '/' in raw_brut_str:
@@ -619,6 +619,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
