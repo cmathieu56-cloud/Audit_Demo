@@ -103,7 +103,6 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         model = genai.GenerativeModel("gemini-2.0-flash")
         
-        # 👇 PROMPT DURCI POUR ÉVITER LA RECOPIE FACTURE = COMMANDE
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
         
@@ -111,7 +110,7 @@ def traiter_un_fichier(nom_fichier, user_id):
            - Fournisseur (Nom complet)
            - Adresse du fournisseur (Ville/CP)
            - NUMÉRO DE TVA Intracommunautaire du fournisseur
-           - IBAN / RIB : Cherche le code IBAN complet du fournisseur.
+           - IBAN / RIB : Cherche le code IBAN complet.
            - DATE de la facture (Format YYYY-MM-DD).
            - NUMÉRO DE FACTURE
            - NUMÉRO DE COMMANDE / CHANTIER : Cherche une mention "V/Réf", "Réf Client", "Chantier" ou "Commande". 
@@ -120,15 +119,15 @@ def traiter_un_fichier(nom_fichier, user_id):
 
         2. EXTRACTION INTELLIGENTE DES LIGNES :
            - Extrais le tableau principal des produits.
-           - Cherche si un NUMÉRO DE BL (Bon de Livraison) est mentionné pour chaque ligne ou groupe de lignes.
+           - Cherche si un NUMÉRO DE BL (Bon de Livraison) est mentionné pour chaque ligne.
            
-           - ⚠️ RÈGLE D'OR (BAS DE PAGE) : Scanne minutieusement le bas de la facture (zone des totaux/taxes).
-           Si tu trouves un MONTANT qui s'ajoute au total mais qui n'est pas de la TVA (exemple: une somme forfaitaire, un port, un emballage, ou une colonne "Divers/FF")...
+           - ⚠️ RÈGLE D'OR (BAS DE PAGE) : Scanne le bas de la facture.
+           Si tu trouves un MONTANT qui s'ajoute au total mais qui n'est pas de la TVA (port, emballage, divers)...
            ... ALORS C'EST UN FRAIS !
            
-           Pour ces montants trouvés en bas de page :
+           Pour ces montants (Frais) :
            - Cree une ligne avec quantite = 1
-           - article = "FRAIS_ANNEXE" (ou "SANS_REF" s'il n'y a rien devant)
+           - article = "FRAIS_ANNEXE"
            - designation = Le nom de la colonne ou "Frais détecté"
            - prix_net = Le montant trouvé
            - montant = Le montant trouvé
@@ -143,13 +142,21 @@ def traiter_un_fichier(nom_fichier, user_id):
             "num_facture": "...",
             "ref_commande": "...",
             "lignes": [
-                {"quantite": 1, "article": "REF123", "prix_net": 10.0, "montant": 10.0, "num_bl_ligne": "..."}
+                {
+                    "quantite": 1, 
+                    "article": "REF123", 
+                    "designation": "Description du produit", 
+                    "prix_net": 10.0, 
+                    "montant": 10.0, 
+                    "num_bl_ligne": "..."
+                }
             ]
         }
         """
         
         res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
         if not res.text: return False, "Vide"
+        
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
@@ -521,6 +528,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
