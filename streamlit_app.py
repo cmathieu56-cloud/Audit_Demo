@@ -422,7 +422,7 @@ if session:
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
-                        "Payé (U)": p_net, # Corrigé : p_net au lieu de paye
+                        "Payé (U)": row['PU_Systeme'],
                         "Cible (U)": cible,
                         "Perte": perte,
                         "Motif": motif,
@@ -584,6 +584,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
