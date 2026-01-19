@@ -152,6 +152,8 @@ def traiter_un_fichier(nom_fichier, user_id):
 session = login_form(url=URL_SUPABASE, apiKey=CLE_ANON)
 
 if session:
+    if 'uploader_key' not in st.session_state:
+        st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
     st.title("🏗️ Audit V21 - Logique Universelle")
 
@@ -428,6 +430,7 @@ if session:
     with tab_import:
         st.header("📥 Charger")
         col_info, col_drop = st.columns([1, 2])
+        
         with col_info:
             st.write("📂 **En mémoire (Compte actuel) :**")
             if memoire:
@@ -440,13 +443,15 @@ if session:
                 try:
                     supabase.table("audit_results").delete().eq("user_id", user_id).execute()
                     st.success("💥 Vos données sont vidées !")
+                    st.session_state['uploader_key'] += 1 # 👈 C'est ça qui vide la liste
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erreur : {e}")
 
         with col_drop:
-            uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
+            # 👇 La clé magique est ici
+            uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True, key=f"uploader_{st.session_state['uploader_key']}")
             force_rewrite = st.checkbox("⚠️ Écraser doublons (Forcer ré-analyse)", value=False)
             
             if uploaded: 
@@ -471,6 +476,7 @@ if session:
                                 
                         barre.progress((i + 1) / len(uploaded))
                     status.success("✅ Traitement terminé !")
+                    st.session_state['uploader_key'] += 1 # 👈 Et ici pour vider après succès
                     time.sleep(1)
                     st.rerun()
 
@@ -484,3 +490,4 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
