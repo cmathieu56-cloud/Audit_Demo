@@ -438,7 +438,9 @@ if session:
             
             st.divider()
             with st.expander("📝 Données brutes (AVEC IBAN/TVA)"):
-                st.dataframe(df, use_container_width=True)
+                # On masque tout ce qui est identifié comme TAXE
+                df_clean_view = df[df['Famille'] != 'TAXE'] 
+                st.dataframe(df_clean_view, use_container_width=True)
 
     with tab_import:
         st.header("📥 Charger")
@@ -503,5 +505,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
