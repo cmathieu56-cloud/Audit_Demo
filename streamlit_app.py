@@ -108,27 +108,27 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         model = genai.GenerativeModel("gemini-2.0-flash")
         
-        prompt = """
+       prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
         
         1. INFOS ENTREPRISE & SÉCURITÉ :
            - Fournisseur (Nom complet), Adresse, TVA, IBAN, Date, Numéro Facture.
            - Numéro Commande : Cherche "V/Réf", "Chantier". Si vide, mets "-".
 
-        2. EXTRACTION DES LIGNES :
-           - Extrais le tableau principal des produits.
-           
-           - 🚨 RÈGLE SPÉCIALE "FRAIS CACHÉS" (YESSS & AUTRES) :
-             Scanne le bas de la facture, y compris les petits tableaux de totaux ou de TVA.
-             Si tu vois une colonne "FF", "Frais", "Port", "Emballage" avec un montant (ex: 8.99)...
-             ... ALORS C'EST UN FRAIS, même s'il est collé à la TVA !
-             
-             Pour ce frais :
-             - quantite = 1
-             - article = "FRAIS_ANNEXE"
-             - designation = Le nom (ex: "Frais Facture FF")
-             - prix_net = Le montant
-             - montant = Le montant
+        2. EXTRACTION DES LIGNES (RÈGLES CRITIQUES) :
+           - Extrais le tableau principal avec ces colonnes précises :
+             * quantite : Le nombre d'unités. 🚨 ATTENTION : Chez Yesss, c'est souvent le TOUT PREMIER nombre au début de la ligne (ex: "100 52041"). Ne l'oublie pas.
+             * article : La référence technique.
+             * designation : Le nom du produit.
+             * prix_brut : Le prix catalogue. ⚠️ Si tu vois un slash (ex: "141.50 / 100"), extrais tout le texte : "141.50 / 100".
+             * remise : Le pourcentage de remise.
+             * prix_net : Le prix payé. ⚠️ Si tu vois un slash (ex: "21.23 / 100"), extrais tout le texte : "21.23 / 100".
+             * montant : Le total HT de la ligne.
+             * num_bl_ligne : Le numéro de BL.
+
+        3. 🚨 RÈGLE "FRAIS CACHÉS" (BAS DE PAGE) :
+           Scanne le bas de la facture (zone TVA). Si tu vois "FF", "Frais", "Port", avec un montant (ex: 8.99)...
+           -> article = "FRAIS_ANNEXE", designation = "Frais Facture FF", prix_net = le montant, montant = le montant.
 
         JSON ATTENDU :
         {
@@ -141,11 +141,13 @@ def traiter_un_fichier(nom_fichier, user_id):
             "ref_commande": "...",
             "lignes": [
                 {
-                    "quantite": 1, 
-                    "article": "REF123", 
-                    "designation": "Description...", 
-                    "prix_net": 10.0, 
-                    "montant": 10.0, 
+                    "quantite": 1,
+                    "article": "...",
+                    "designation": "...",
+                    "prix_brut": "...",
+                    "remise": "...",
+                    "prix_net": "...",
+                    "montant": 0.0,
                     "num_bl_ligne": "..."
                 }
             ]
@@ -526,6 +528,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
