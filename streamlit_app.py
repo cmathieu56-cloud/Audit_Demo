@@ -408,6 +408,8 @@ if session:
                 if perte > 0.01:
                     anomalies.append({
                         "Fournisseur": fourn,
+                        "Prix Brut": row['Prix Brut'],
+                        "Remise": row['Remise'], 
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Payé (U)": row['PU_Systeme'],
@@ -577,6 +579,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
