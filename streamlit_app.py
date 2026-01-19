@@ -59,13 +59,28 @@ def detecter_famille(label, ref=""):
     if not isinstance(ref, str): ref = ""
     label_up, ref_up = label.upper(), ref.upper()
     
-    # 1. PRIORITÉ ABSOLUE : LES TAXES (DEEE, ECO-PART, ETC.)
-    # On regarde si le mot magique est dans la Désignation OU dans la Référence
+    # 1. TAXES (Priorité absolue)
     mots_taxes = ["ENERG", "TAXE", "CONTRIBUTION", "DEEE", "SORECOP", "ECO-PART", "ECO "]
     if any(x in label_up for x in mots_taxes) or any(x in ref_up for x in mots_taxes): 
         return "TAXE"
 
-    # 2. Ensuite on traite le reste comme d'habitude
+    # 2. FRAIS DE GESTION (C'est ici qu'on attrape le FF et le FRAIS_ANNEXE)
+    # Si l'IA a détecté un "FRAIS_ANNEXE", c'est forcément de la gestion
+    if "FRAIS_ANNEXE" in ref_up: 
+        return "FRAIS GESTION"
+        
+    # On cherche "FF" (strict) ou "FRAIS FACT"
+    if label_up.strip() == "FF" or "FF " in label_up or " FF" in label_up:
+        return "FRAIS GESTION"
+        
+    if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF"]): 
+        return "FRAIS GESTION"
+
+    # 3. FRAIS DE PORT
+    if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]): return "FRAIS PORT"
+    if "EMBALLAGE" in label_up: return "EMBALLAGE"
+
+    # 4. TRI TECHNIQUE
     mots_cles_frais_ref = ["PORT", "FRAIS", "SANS_REF", "DIVERS"]
     is_ref_exclusion = any(kw in ref_up for kw in mots_cles_frais_ref)
     ref_is_technique = (len(ref) > 3) and (not is_ref_exclusion)
@@ -75,10 +90,6 @@ def detecter_famille(label, ref=""):
         if any(x in label_up for x in ["CABLE", "FIL ", "COURONNE", "U1000", "R2V"]): return "CABLAGE"
         if any(x in label_up for x in ["COLASTIC", "MASTIC", "CHIMIQUE", "COLLE"]): return "CONSOMMABLE"
         return "AUTRE_PRODUIT"
-
-    if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF", "FF "]): return "FRAIS GESTION"
-    if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]): return "FRAIS PORT"
-    if "EMBALLAGE" in label_up: return "EMBALLAGE"
     
     return "AUTRE_PRODUIT"
 
@@ -515,6 +526,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
