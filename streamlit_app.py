@@ -59,7 +59,14 @@ def detecter_famille(label, ref=""):
     if not isinstance(ref, str): ref = ""
     label_up, ref_up = label.upper(), ref.upper()
     
-    mots_cles_frais_ref = ["PORT", "FRAIS", "SANS_REF", "DEEE", "TAXE", "ECO", "DIVERS"]
+    # 1. PRIORITÉ ABSOLUE : LES TAXES (DEEE, ECO-PART, ETC.)
+    # On regarde si le mot magique est dans la Désignation OU dans la Référence
+    mots_taxes = ["ENERG", "TAXE", "CONTRIBUTION", "DEEE", "SORECOP", "ECO-PART", "ECO "]
+    if any(x in label_up for x in mots_taxes) or any(x in ref_up for x in mots_taxes): 
+        return "TAXE"
+
+    # 2. Ensuite on traite le reste comme d'habitude
+    mots_cles_frais_ref = ["PORT", "FRAIS", "SANS_REF", "DIVERS"]
     is_ref_exclusion = any(kw in ref_up for kw in mots_cles_frais_ref)
     ref_is_technique = (len(ref) > 3) and (not is_ref_exclusion)
     
@@ -68,6 +75,12 @@ def detecter_famille(label, ref=""):
         if any(x in label_up for x in ["CABLE", "FIL ", "COURONNE", "U1000", "R2V"]): return "CABLAGE"
         if any(x in label_up for x in ["COLASTIC", "MASTIC", "CHIMIQUE", "COLLE"]): return "CONSOMMABLE"
         return "AUTRE_PRODUIT"
+
+    if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF", "FF "]): return "FRAIS GESTION"
+    if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]): return "FRAIS PORT"
+    if "EMBALLAGE" in label_up: return "EMBALLAGE"
+    
+    return "AUTRE_PRODUIT"
 
     if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF", "FF "]): return "FRAIS GESTION"
     if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]): return "FRAIS PORT"
@@ -490,4 +503,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
