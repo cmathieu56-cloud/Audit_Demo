@@ -222,7 +222,27 @@ if session:
                 if qte_ia == 0: qte_ia = 1
                 
                 montant = clean_float(l.get('montant', 0))
-                p_net = clean_float(l.get('prix_net', 0))
+                
+                # Calcul du Net (ex: 21.23 / 100)
+                raw_net = str(l.get('prix_net', '0'))
+                p_net = clean_float(raw_net)
+                if '/' in raw_net:
+                    try:
+                        div = float(raw_net.split('/')[-1].replace(' ', ''))
+                        if div > 0: p_net = p_net / div
+                    except: pass
+
+                # Calcul du Brut (ex: 141.50 / 100)
+                raw_brut = str(l.get('prix_brut', '0'))
+                p_brut = clean_float(raw_brut)
+                if '/' in raw_brut:
+                    try:
+                        div_b = float(raw_brut.split('/')[-1].replace(' ', ''))
+                        if div_b > 0: p_brut = p_brut / div_b
+                    except: pass
+                
+                remise = str(l.get('remise', '-'))
+                # --- FIN DU BLOC A INSERER ---
                 num_bl = l.get('num_bl_ligne', '-')
                 
                 qte_finale = qte_ia
@@ -259,6 +279,8 @@ if session:
                     "Quantité": qte_finale,
                     "Article": article,
                     "Désignation": l.get('designation', ''),
+                    "Prix Brut": raw_brut,
+                    "Remise": remise,
                     "Prix Net": p_net, 
                     "Montant": montant,
                     "PU_Systeme": pu_systeme,
@@ -528,6 +550,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
