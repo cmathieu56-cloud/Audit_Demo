@@ -375,40 +375,7 @@ if session:
                 motif = ""
                 cible = 0.0 
                 source_cible = "-"
-                detail_tech = ""
-
-                if row['Famille'] == 'FRAIS PORT':
-                    total_fac = facture_totals.get(f_name, 0)
-                    if seuil_franco > 0 and total_fac >= seuil_franco:
-                        perte = row['Montant']
-                        cible = 0.0
-                        motif = "Hors Franco"
-                        detail_tech = f"Total commande {total_fac}€ > Seuil {seuil_franco}€"
-                    elif seuil_franco == 0:
-                        perte = row['Montant']
-                        cible = 0.0
-                        motif = "Port Facturé"
-                        detail_tech = "Config réglée à 0€"
-
-                elif row['Famille'] == 'FRAIS GESTION':
-                    if row['Montant'] > max_gestion:
-                        perte = row['Montant'] - max_gestion
-                        cible = max_gestion
-                        motif = "Frais Abusifs"
-
-                elif row['Article'] in ref_map and row['Famille'] not in ['FRAIS PORT', 'FRAIS GESTION', 'TAXE']:
-                    best_info = ref_map[row['Article']]
-                    best_price = best_info['PU_Systeme']
-                    best_fac = best_info['Facture']
-                    best_date = best_info.get('Date', '?')
-                    
-                    if row['PU_Systeme'] > best_price + 0.005:
-                        ecart_u = row['PU_Systeme'] - best_price
-                        perte = ecart_u * row['Quantité']
-                        cible = best_price
-                        motif = "Hausse Prix"
-                        source_cible = f"{best_date}"
-                        detail_tech = f"(Facture {best_fac})"
+                detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
                     # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
@@ -447,6 +414,7 @@ if session:
                     anomalies.append({
                         "Fournisseur": fourn,
                         "Num Facture": row['Facture'],
+                        "Ref_Cmd": row['Chantier'], # <-- C'est CETTE ligne qui manquait pour "Ref_Cmd"
                         "BL": row['BL'], 
                         "Famille": row['Famille'],
                         "PU_Systeme": row['PU_Systeme'],
@@ -619,6 +587,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
