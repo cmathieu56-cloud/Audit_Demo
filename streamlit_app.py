@@ -108,7 +108,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         model = genai.GenerativeModel("gemini-2.0-flash")
         
-       prompt = """
+        prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
         
         1. INFOS ENTREPRISE & SÉCURITÉ :
@@ -550,6 +550,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
