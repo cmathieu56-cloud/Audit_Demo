@@ -101,30 +101,23 @@ def traiter_un_fichier(nom_fichier, user_id):
         Analyse cette facture et extrais TOUTES les données structurées.
         
         1. INFOS ENTREPRISE & SÉCURITÉ :
-           - Fournisseur (Nom complet)
-           - Adresse du fournisseur (Ville/CP)
-           - NUMÉRO DE TVA Intracommunautaire du fournisseur
-           - IBAN / RIB : Cherche le code IBAN complet.
-           - DATE de la facture (Format YYYY-MM-DD).
-           - NUMÉRO DE FACTURE
-           - NUMÉRO DE COMMANDE / CHANTIER : Cherche une mention "V/Réf", "Réf Client", "Chantier" ou "Commande". 
-             ⚠️ INTERDICTION FORMELLE DE RECOPIER LE NUMÉRO DE FACTURE ICI.
-             Si tu ne trouves aucune référence client distincte, mets simplement "-" (tiret).
+           - Fournisseur (Nom complet), Adresse, TVA, IBAN, Date, Numéro Facture.
+           - Numéro Commande : Cherche "V/Réf", "Chantier". Si vide, mets "-".
 
-        2. EXTRACTION INTELLIGENTE DES LIGNES :
+        2. EXTRACTION DES LIGNES :
            - Extrais le tableau principal des produits.
-           - Cherche si un NUMÉRO DE BL (Bon de Livraison) est mentionné pour chaque ligne.
            
-           - ⚠️ RÈGLE D'OR (BAS DE PAGE) : Scanne le bas de la facture.
-           Si tu trouves un MONTANT qui s'ajoute au total mais qui n'est pas de la TVA (port, emballage, divers)...
-           ... ALORS C'EST UN FRAIS !
-           
-           Pour ces montants (Frais) :
-           - Cree une ligne avec quantite = 1
-           - article = "FRAIS_ANNEXE"
-           - designation = Le nom de la colonne ou "Frais détecté"
-           - prix_net = Le montant trouvé
-           - montant = Le montant trouvé
+           - 🚨 RÈGLE SPÉCIALE "FRAIS CACHÉS" (YESSS & AUTRES) :
+             Scanne le bas de la facture, y compris les petits tableaux de totaux ou de TVA.
+             Si tu vois une colonne "FF", "Frais", "Port", "Emballage" avec un montant (ex: 8.99)...
+             ... ALORS C'EST UN FRAIS, même s'il est collé à la TVA !
+             
+             Pour ce frais :
+             - quantite = 1
+             - article = "FRAIS_ANNEXE"
+             - designation = Le nom (ex: "Frais Facture FF")
+             - prix_net = Le montant
+             - montant = Le montant
 
         JSON ATTENDU :
         {
@@ -139,7 +132,7 @@ def traiter_un_fichier(nom_fichier, user_id):
                 {
                     "quantite": 1, 
                     "article": "REF123", 
-                    "designation": "Description du produit", 
+                    "designation": "Description...", 
                     "prix_net": 10.0, 
                     "montant": 10.0, 
                     "num_bl_ligne": "..."
@@ -522,6 +515,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
