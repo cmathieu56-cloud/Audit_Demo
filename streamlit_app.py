@@ -114,7 +114,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         
-        model = genai.GenerativeModel("gemini-1.5-flash") # Correction version modèle standard
+        model = genai.GenerativeModel("gemini-1.5-flash")
         
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
@@ -378,24 +378,41 @@ if session:
                 source_cible = "-"
                 detail_tech = ""
                 
-                # --- LOGIQUE COMPARATIVE (Réparée) ---
-                article_courant = row['Article']
-                if article_courant in ref_map and article_courant != 'SANS_REF':
-                    ref_info = ref_map[article_courant]
-                    best_price = ref_info['PU_Systeme']
-                    best_fac = ref_info['Facture']
-                    best_date = ref_info['Date']
-                    
-                    if row['PU_Systeme'] > best_price + 0.005:
-                        ecart_u = row['PU_Systeme'] - best_price
-                        perte = ecart_u * row['Quantité']
-                        cible = best_price
-                        motif = "Hausse Prix"
-                        source_cible = f"{best_date}"
-                        detail_tech = f"(Facture {best_fac})"
+                # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
+                if row['Famille'] == "FRAIS GESTION":
+                    if row['Montant'] > max_gestion:
+                        perte = row['Montant'] - max_gestion
+                        cible = max_gestion
+                        motif = "Frais Facturation Abusifs"
+                        detail_tech = f"(Max autorisé: {max_gestion}€)"
+                
+                elif row['Famille'] == "FRAIS PORT":
+                    total_fac = facture_totals.get(f_name, 0)
+                    if total_fac >= seuil_franco:
+                        perte = row['Montant']
+                        motif = "Port facturé malgré Franco"
+                        cible = 0.0
+                        detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
+
+                # --- LOGIQUE 2 : PRODUITS (Hausse de prix) ---
+                else:
+                    article_courant = row['Article']
+                    if article_courant in ref_map and article_courant != 'SANS_REF':
+                        ref_info = ref_map[article_courant]
+                        best_price = ref_info['PU_Systeme']
+                        best_fac = ref_info['Facture']
+                        best_date = ref_info['Date']
+                        
+                        if row['PU_Systeme'] > best_price + 0.005:
+                            ecart_u = row['PU_Systeme'] - best_price
+                            perte = ecart_u * row['Quantité']
+                            cible = best_price
+                            motif = "Hausse Prix"
+                            source_cible = f"{best_date}"
+                            detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
-                    # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
+                    # --- Calcul Remise Cible ---
                     remise_val = row['Remise']
                     remise_str = str(remise_val).replace('%', '').strip() if remise_val is not None else "0"
                     
@@ -406,15 +423,13 @@ if session:
                             coef_net *= (1 - val/100)
                         except: pass
                     
-                    # On retrouve le prix catalogue unitaire théorique
                     p_brut_unitaire_calc = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
                     rem_cible = (1 - (cible / p_brut_unitaire_calc)) * 100 if p_brut_unitaire_calc > 0 else 0
 
-                    # --- 2. Nettoyage et Formatage du Prix Brut ---
+                    # --- Formatage Affichage ---
                     prix_brut_affiche = row['Prix Brut']
                     raw_brut_str = str(row['Prix Brut'])
                     
-                    # Gestion de la division (ex: /1000)
                     if '/' in raw_brut_str:
                         try:
                             parts = raw_brut_str.split('/')
@@ -424,7 +439,6 @@ if session:
                                 prix_brut_affiche = val_b / div_b
                         except: pass
                     
-                    # Formatage strict à 2 décimales (ex: 1.72)
                     try:
                         val_float = float(str(prix_brut_affiche).replace(' ', '').replace(',', '.'))
                         prix_brut_affiche = f"{val_float:.2f}"
@@ -433,14 +447,14 @@ if session:
                     anomalies.append({
                         "Fournisseur": fourn,
                         "Num Facture": row['Facture'],
-                        "Ref_Cmd": row['Ref_Cmd'], # CLEF REPAREE
+                        "Ref_Cmd": row['Ref_Cmd'], 
                         "BL": row['BL'], 
                         "Famille": row['Famille'],
                         "PU_Systeme": row['PU_Systeme'],
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
-                        "Remise Cible": f"{rem_cible:.1f}", # Pas de %
+                        "Remise Cible": f"{rem_cible:.1f}", 
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
@@ -449,8 +463,8 @@ if session:
                         "Perte": perte,
                         "Motif": motif,
                         "Date Facture": row['Date'],
-                        "Source Cible": source_cible,     # CLEF AJOUTEE
-                        "Détails Techniques": detail_tech # CLEF AJOUTEE
+                        "Source Cible": source_cible,     
+                        "Détails Techniques": detail_tech 
                     })
                     
             if anomalies:
@@ -526,6 +540,8 @@ if session:
                         
                         if row_sel['Motif'] == "Hausse Prix":
                             st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
+                        elif "Frais" in row_sel['Motif'] or "Port" in row_sel['Motif']:
+                             st.error(f"🚫 **Anomalie Contractuelle :** {row_sel['Motif']}. {row_sel['Détails Techniques']}")
 
             else:
                 st.success("✅ Clean sheet. Aucune anomalie détectée.")
