@@ -410,7 +410,7 @@ if session:
                         source_cible = f"{best_date}"
                         detail_tech = f"(Facture {best_fac})"
 
-                if perte > 0.01:
+               if perte > 0.01:
                     # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
                     remise_str = str(row['Remise']).replace('%', '').strip()
                     coef_net = 1.0
@@ -440,15 +440,13 @@ if session:
                     
                     # Formatage strict à 2 décimales (ex: 1.72)
                     try:
-                        # On s'assure que c'est un nombre avant de formater
                         val_float = float(str(prix_brut_affiche).replace(' ', '').replace(',', '.'))
                         prix_brut_affiche = f"{val_float:.2f}"
-                    except:
-                        # Si ce n'est pas un nombre, on laisse tel quel
-                        pass
+                    except: pass
 
                     anomalies.append({
                         "Fournisseur": fourn,
+                        "Num Facture": row['Facture'], # <-- Ligne réintégrée pour corriger le KeyError
                         "BL": row['BL'], 
                         "Famille": row['Famille'],
                         "PU_Systeme": row['PU_Systeme'],
@@ -621,6 +619,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
