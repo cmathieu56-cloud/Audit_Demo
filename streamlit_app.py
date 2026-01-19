@@ -114,7 +114,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         
-        model = genai.GenerativeModel("gemini-3-flash-preview")
+        model = genai.GenerativeModel("gemini-1.5-flash") # Correction version modèle standard
         
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
@@ -347,6 +347,7 @@ if session:
                     st.error(f"Erreur de sauvegarde : {e}")
         
         config_dict = edited_config.set_index('Fournisseur').to_dict('index')
+
     with tab_analyse:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
@@ -375,11 +376,29 @@ if session:
                 motif = ""
                 cible = 0.0 
                 source_cible = "-"
-                detail_tech = f"(Facture {best_fac})"
+                detail_tech = ""
+                
+                # --- LOGIQUE COMPARATIVE (Réparée) ---
+                article_courant = row['Article']
+                if article_courant in ref_map and article_courant != 'SANS_REF':
+                    ref_info = ref_map[article_courant]
+                    best_price = ref_info['PU_Systeme']
+                    best_fac = ref_info['Facture']
+                    best_date = ref_info['Date']
+                    
+                    if row['PU_Systeme'] > best_price + 0.005:
+                        ecart_u = row['PU_Systeme'] - best_price
+                        perte = ecart_u * row['Quantité']
+                        cible = best_price
+                        motif = "Hausse Prix"
+                        source_cible = f"{best_date}"
+                        detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
                     # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
-                    remise_str = str(row['Remise']).replace('%', '').strip()
+                    remise_val = row['Remise']
+                    remise_str = str(remise_val).replace('%', '').strip() if remise_val is not None else "0"
+                    
                     coef_net = 1.0
                     for part in remise_str.split('+'):
                         try:
@@ -414,14 +433,14 @@ if session:
                     anomalies.append({
                         "Fournisseur": fourn,
                         "Num Facture": row['Facture'],
-                        "Ref_Cmd": row['Chantier'], # <-- C'est CETTE ligne qui manquait pour "Ref_Cmd"
+                        "Ref_Cmd": row['Ref_Cmd'], # CLEF REPAREE
                         "BL": row['BL'], 
                         "Famille": row['Famille'],
                         "PU_Systeme": row['PU_Systeme'],
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
-                        "Remise Cible": f"{rem_cible:.1f}",
+                        "Remise Cible": f"{rem_cible:.1f}", # Pas de %
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
@@ -429,7 +448,9 @@ if session:
                         "Cible (U)": cible,
                         "Perte": perte,
                         "Motif": motif,
-                        "Date Facture": row['Date']
+                        "Date Facture": row['Date'],
+                        "Source Cible": source_cible,     # CLEF AJOUTEE
+                        "Détails Techniques": detail_tech # CLEF AJOUTEE
                     })
                     
             if anomalies:
@@ -515,7 +536,6 @@ if session:
                 df_view = df[df['Famille'] != 'TAXE']
                 
                 # 2. On masque les colonnes administratives et redondantes
-                # Cela évite de répéter le fournisseur et la date qui sont déjà en haut
                 cols_inutiles = ['IBAN', 'TVA_Intra', 'Adresse', 'Fournisseur', 'Facture', 'Date', 'Ref_Cmd', 'Fichier']
                 df_view = df_view.drop(columns=cols_inutiles, errors='ignore')
                 
@@ -587,42 +607,3 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
