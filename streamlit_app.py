@@ -463,10 +463,12 @@ if session:
                         on_select="rerun",
                         selection_mode="single-row",
                         hide_index=True,
-                        column_order=["Date Facture", "Qte", "Ref", "Désignation", "Payé (U)", "Cible (U)", "Perte", "Motif"],
+                        column_order=["Date Facture", "Qte", "Ref", "Désignation", "Prix Brut", "Remise", "Payé (U)", "Cible (U)", "Perte", "Motif"],
                         column_config={
                             "Date Facture": st.column_config.TextColumn("Date", width="small"),
                             "Qte": st.column_config.NumberColumn("Qte", format="%.0f", width="small"),
+                            "Prix Brut": st.column_config.TextColumn("Brut", width="small"),
+                            "Remise": st.column_config.TextColumn("Remise", width="small"),
                             "Ref": st.column_config.TextColumn("Ref", width="small"),
                             "Payé (U)": st.column_config.NumberColumn("Payé (Calc)", format="%.3f €"),
                             "Cible (U)": st.column_config.NumberColumn("Cible", format="%.3f €"),
@@ -575,6 +577,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
