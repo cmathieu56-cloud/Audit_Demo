@@ -82,12 +82,6 @@ def detecter_famille(label, ref=""):
     
     return "AUTRE_PRODUIT"
 
-    if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF", "FF "]): return "FRAIS GESTION"
-    if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]): return "FRAIS PORT"
-    if any(x in label_up for x in ["ENERG", "TAXE", "CONTRIBUTION", "DEEE", "SORECOP", "ECO-PART"]): return "TAXE"
-    if "EMBALLAGE" in label_up: return "EMBALLAGE"
-    
-    return "AUTRE_PRODUIT"
 
 def extraire_json_robuste(texte):
     try:
@@ -528,6 +522,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
