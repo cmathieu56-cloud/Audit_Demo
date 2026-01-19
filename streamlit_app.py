@@ -187,6 +187,7 @@ def traiter_un_fichier(nom_fichier, user_id):
 session = login_form(url=URL_SUPABASE, apiKey=CLE_ANON)
 
 if session:
+    supabase.postgrest.auth(session["access_token"])
     if 'uploader_key' not in st.session_state:
         st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
@@ -574,6 +575,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
