@@ -410,7 +410,7 @@ if session:
                         source_cible = f"{best_date}"
                         detail_tech = f"(Facture {best_fac})"
 
-                    if perte > 0.01:
+                if perte > 0.01:
                     # --- 1. Calcul de la Remise Cible (Méthode "Net Inversé") ---
                     remise_str = str(row['Remise']).replace('%', '').strip()
                     coef_net = 1.0
@@ -426,7 +426,7 @@ if session:
 
                     # --- 2. Nettoyage et Formatage du Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
-                    raw_brut_str = str(row['Prix Brut'])  # Variable indispensable définie ici
+                    raw_brut_str = str(row['Prix Brut'])
                     
                     # Gestion de la division (ex: /1000)
                     if '/' in raw_brut_str:
@@ -619,6 +619,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
