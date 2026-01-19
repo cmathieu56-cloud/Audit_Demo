@@ -406,28 +406,28 @@ if session:
                         detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
-            # Calcul de la remise nécessaire pour atteindre la cible
-            p_brut_numeric = clean_float(str(row['Prix Brut']).split('/')[0])
-            rem_cible = (1 - (cible / p_brut_numeric)) * 100 if p_brut_numeric > 0 else 0
-            
-            anomalies.append({
-                "Fournisseur": fourn,
-                "BL": row['BL'], 
-                "Famille": row['Famille'],
-                "PU_Systeme": row['PU_Systeme'],
-                "Montant": row['Montant'],
-                "Prix Brut": row['Prix Brut'],
-                "Remise": row['Remise'],
-                "Remise Cible": f"{rem_cible:.1f}%",
-                "Qte": row['Quantité'],
-                "Ref": row['Article'],
-                "Désignation": row['Désignation'],
-                "Payé (U)": paye,
-                "Cible (U)": cible,
-                "Perte": perte,
-                "Motif": motif,
-                "Date Facture": row['Date']
-            })
+                    # Calcul de la remise nécessaire pour atteindre la cible
+                    p_brut_numeric = clean_float(str(row['Prix Brut']).split('/')[0])
+                    rem_cible = (1 - (cible / p_brut_numeric)) * 100 if p_brut_numeric > 0 else 0
+                    
+                    anomalies.append({
+                        "Fournisseur": fourn,
+                        "BL": row['BL'], 
+                        "Famille": row['Famille'],
+                        "PU_Systeme": row['PU_Systeme'],
+                        "Montant": row['Montant'],
+                        "Prix Brut": row['Prix Brut'],
+                        "Remise": row['Remise'],
+                        "Remise Cible": f"{rem_cible:.1f}%",
+                        "Qte": row['Quantité'],
+                        "Ref": row['Article'],
+                        "Désignation": row['Désignation'],
+                        "Payé (U)": p_net, # Corrigé : p_net au lieu de paye
+                        "Cible (U)": cible,
+                        "Perte": perte,
+                        "Motif": motif,
+                        "Date Facture": row['Date']
+                    })
 
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
@@ -584,6 +584,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
