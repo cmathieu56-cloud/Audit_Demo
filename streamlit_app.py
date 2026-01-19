@@ -103,7 +103,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         model = genai.GenerativeModel("gemini-2.0-flash")
         
-        # 👇 ICI : LA CONSIGNE MODIFIÉE SELON TA LOGIQUE "MONTANT SANS REF = FRAIS"
+        # 👇 PROMPT DURCI POUR ÉVITER LA RECOPIE FACTURE = COMMANDE
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
         
@@ -111,13 +111,16 @@ def traiter_un_fichier(nom_fichier, user_id):
            - Fournisseur (Nom complet)
            - Adresse du fournisseur (Ville/CP)
            - NUMÉRO DE TVA Intracommunautaire du fournisseur
-           - IBAN / RIB : Cherche le code IBAN complet du fournisseur pour contrôle fraude.
+           - IBAN / RIB : Cherche le code IBAN complet du fournisseur.
            - DATE de la facture (Format YYYY-MM-DD).
            - NUMÉRO DE FACTURE
-           - NUMÉRO DE COMMANDE (Ref Client / Chantier)
+           - NUMÉRO DE COMMANDE / CHANTIER : Cherche une mention "V/Réf", "Réf Client", "Chantier" ou "Commande". 
+             ⚠️ INTERDICTION FORMELLE DE RECOPIER LE NUMÉRO DE FACTURE ICI.
+             Si tu ne trouves aucune référence client distincte, mets simplement "-" (tiret).
 
         2. EXTRACTION INTELLIGENTE DES LIGNES :
            - Extrais le tableau principal des produits.
+           - Cherche si un NUMÉRO DE BL (Bon de Livraison) est mentionné pour chaque ligne ou groupe de lignes.
            
            - ⚠️ RÈGLE D'OR (BAS DE PAGE) : Scanne minutieusement le bas de la facture (zone des totaux/taxes).
            Si tu trouves un MONTANT qui s'ajoute au total mais qui n'est pas de la TVA (exemple: une somme forfaitaire, un port, un emballage, ou une colonne "Divers/FF")...
@@ -510,6 +513,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
