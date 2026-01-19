@@ -297,34 +297,50 @@ if session:
     tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
 
     with tab_config:
-        st.header("🛠️ Règles")
+        st.header("🛠️ Réglages Fournisseurs")
         
-        default_data = []
-        if fournisseurs_detectes:
-            for f in fournisseurs_detectes:
-                default_data.append({"Fournisseur": f, "Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0})
-        else:
-            default_data.append({"Fournisseur": "EXEMPLE", "Franco (Seuil €)": 300.0, "Max Gestion (€)": 5.0})
-
+        # 1. Chargement initial depuis Supabase
         if 'config_df' not in st.session_state:
-            st.session_state['config_df'] = pd.DataFrame(default_data)
+            try:
+                res_cfg = supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
+                if res_cfg.data:
+                    st.session_state['config_df'] = pd.DataFrame(res_cfg.data).rename(
+                        columns={'franco': 'Franco (Seuil €)', 'max_gestion': 'Max Gestion (€)', 'fournisseur': 'Fournisseur'}
+                    )[['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)']]
+                else:
+                    st.session_state['config_df'] = pd.DataFrame(columns=['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)'])
+            except:
+                st.session_state['config_df'] = pd.DataFrame(columns=['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)'])
+
+        # 2. Ajout des nouveaux fournisseurs détectés dans le scan
+        current_df = st.session_state['config_df']
+        for f in fournisseurs_detectes:
+            if f not in current_df['Fournisseur'].values:
+                new_line = pd.DataFrame([{"Fournisseur": f, "Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0}])
+                current_df = pd.concat([current_df, new_line], ignore_index=True)
         
-        if 'Fournisseur' in st.session_state['config_df'].columns:
-            current_suppliers = st.session_state['config_df']['Fournisseur'].unique()
-            for f in fournisseurs_detectes:
-                if f not in current_suppliers:
-                    new_row = pd.DataFrame([{"Fournisseur": f, "Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0}])
-                    st.session_state['config_df'] = pd.concat([st.session_state['config_df'], new_row], ignore_index=True)
+        # 3. Édition du tableau
+        edited_config = st.data_editor(current_df, num_rows="dynamic", use_container_width=True, key="editor_cfg")
+        st.session_state['config_df'] = edited_config
 
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            edited_config = st.data_editor(st.session_state['config_df'], num_rows="dynamic", use_container_width=True)
-            st.session_state['config_df'] = edited_config
-            
-            config_dict = {}
-            if not edited_config.empty and "Fournisseur" in edited_config.columns:
-                config_dict = edited_config.set_index('Fournisseur').to_dict('index')
-
+        # 4. BOUTON DE SAUVEGARDE
+        if st.button("💾 SAUVEGARDER LES RÉGLAGES", type="primary"):
+            with st.spinner("Enregistrement..."):
+                try:
+                    for _, row in edited_config.iterrows():
+                        supabase.table("user_configs").upsert({
+                            "user_id": user_id,
+                            "fournisseur": row['Fournisseur'],
+                            "franco": float(row['Franco (Seuil €)']),
+                            "max_gestion": float(row['Max Gestion (€)'])
+                        }).execute()
+                    st.success("✅ Réglages enregistrés !")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur de sauvegarde : {e}")
+        
+        config_dict = edited_config.set_index('Fournisseur').to_dict('index')
     with tab_analyse:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
@@ -558,6 +574,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
