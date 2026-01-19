@@ -76,8 +76,10 @@ def detecter_famille(label, ref=""):
     if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF"]): 
         return "FRAIS GESTION"
 
-    # 3. FRAIS DE PORT
-    if any(x in label_up for x in ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]): return "FRAIS PORT"
+        # 3. FRAIS DE PORT (On exclut le mot SUPPORT pour éviter l'erreur)
+    keywords_port = ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]
+    if any(x in label_up for x in keywords_port) and "SUPPORT" not in label_up: 
+        return "FRAIS PORT"
     if "EMBALLAGE" in label_up: return "EMBALLAGE"
 
     # 4. TRI TECHNIQUE
@@ -518,26 +520,29 @@ if session:
             if uploaded: 
                 if st.button("🚀 LANCER"):
                     barre = st.progress(0)
-                    status = st.empty()
                     for i, f in enumerate(uploaded):
-                        time.sleep(2)
+                        with st.status(f"Analyse de {f.name}...", expanded=True) as status_box:
+                            if f.name in memoire and not force_rewrite:
+                                status_box.update(label=f"⚠️ {f.name} ignoré", state="error")
+                            else:
+                                status_box.write("📤 Étape 1 : Envoi vers Supabase...")
+                                try:
+                                    supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
+                                    status_box.write("🧠 Étape 2 : L'IA calcule (15-20s)...")
+                                    ok, msg = traiter_un_fichier(f.name, user_id)
+                                    
+                                    if ok:
+                                        status_box.update(label=f"✅ {f.name} fini", state="complete", expanded=False)
+                                    else:
+                                        status_box.update(label=f"❌ Erreur {f.name}", state="error")
+                                        st.error(msg)
+                                except Exception as up_err:
+                                    status_box.update(label="❌ Erreur technique", state="error")
+                                    st.error(up_err)
                         
-                        if f.name in memoire and not force_rewrite:
-                            status.warning(f"⚠️ {f.name} ignoré (déjà présent).")
-                            time.sleep(0.5)
-                        else:
-                            status.write(f"⏳ Analyse ({i+1}/{len(uploaded)}) : **{f.name}**...")
-                            try:
-                                supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                                ok, msg = traiter_un_fichier(f.name, user_id)
-                                if ok: st.toast(f"✅ {f.name} OK")
-                                else: st.error(f"❌ {f.name}: {msg}")
-                            except Exception as up_err:
-                                st.error(f"Erreur Upload {f.name}: {up_err}")
-                                
                         barre.progress((i + 1) / len(uploaded))
-                    status.success("✅ Traitement terminé !")
-                    st.session_state['uploader_key'] += 1 # 👈 Et ici pour vider après succès
+
+                    st.session_state['uploader_key'] += 1 
                     time.sleep(1)
                     st.rerun()
 
@@ -551,6 +556,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
