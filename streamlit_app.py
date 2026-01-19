@@ -385,7 +385,7 @@ if session:
                         cible = best_price
                         motif = "Hausse Prix"
                         source_cible = f"{best_date}"
-                        detail_tech = f"Meilleur: {best_price:.3f}€ (Facture {best_fac})"
+                        detail_tech = f"(Facture {best_fac})"
 
                 if perte > 0.01:
                     anomalies.append({
@@ -557,6 +557,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
