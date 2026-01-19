@@ -150,14 +150,13 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
         if not res.text: return False, "Vide"
-     data_json = extraire_json_robuste(res.text)
+        data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
         # --- CORRECTIF : Si Facture = Commande, on efface ! ---
         n_fac = data_json.get('num_facture', '').strip()
         n_cmd = data_json.get('ref_commande', '').strip()
         
-        # On nettoie si c'est identique ou si ça contient le numéro de facture
         if n_fac and n_cmd and (n_fac in n_cmd or n_cmd in n_fac):
              data_json['ref_commande'] = "-"
         # ------------------------------------------------------
@@ -522,6 +521,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
