@@ -65,22 +65,27 @@ def detecter_famille(label, ref=""):
         return "TAXE"
 
     # 2. FRAIS DE GESTION (C'est ici qu'on attrape le FF et le FRAIS_ANNEXE)
-    # Si l'IA a détecté un "FRAIS_ANNEXE", c'est forcément de la gestion
-    if "FRAIS_ANNEXE" in ref_up: 
-        return "FRAIS GESTION"
-        
-    # On cherche "FF" (strict) ou "FRAIS FACT"
+    if "FRAIS_ANNEXE" in ref_up: return "FRAIS GESTION"
+    
     if label_up.strip() == "FF" or "FF " in label_up or " FF" in label_up:
         return "FRAIS GESTION"
         
     if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF"]): 
         return "FRAIS GESTION"
 
-        # 3. FRAIS DE PORT (On exclut le mot SUPPORT pour éviter l'erreur)
+    # 3. FRAIS DE PORT (Avec sécurité anti-faux positif)
     keywords_port = ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]
-    exclusions_port = ["SUPPORT", "SUPORT"]
-    if any(x in label_up for x in keywords_port) and not any(ex in label_up for ex in exclusions_port): 
-        return "FRAIS PORT"
+    
+    # Si la référence est longue (ex: AXIPAN10), c'est un produit, pas du port !
+    # On considère qu'une vraie ref technique fait plus de 4 caractères
+    is_real_product_ref = len(ref) > 4 and not any(k in ref_up for k in ["PORT", "FRAIS"])
+    
+    if any(x in label_up for x in keywords_port) and not is_real_product_ref:
+        # Double sécurité : on évite les mots composés comme "SUPPORT" ou le pluriel "PORTS"
+        exclusions_port = ["SUPPORT", "SUPORT", "PORTS", "RJ45", "DATA", "PANNEAU"]
+        if not any(ex in label_up for ex in exclusions_port): 
+            return "FRAIS PORT"
+            
     if "EMBALLAGE" in label_up: return "EMBALLAGE"
 
     # 4. TRI TECHNIQUE
@@ -595,6 +600,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
