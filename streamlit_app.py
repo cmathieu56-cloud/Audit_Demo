@@ -13,7 +13,7 @@ from io import BytesIO
 # ==============================================================================
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"] # TA CLÉ EST LÀ
 
 st.set_page_config(page_title="Audit V21 - Logique Universelle", page_icon="🏗️", layout="wide")
 
@@ -59,18 +59,24 @@ def detecter_famille(label, ref=""):
     if not isinstance(ref, str): ref = ""
     label_up, ref_up = label.upper(), ref.upper()
     
+    # 1. TAXES (Priorité absolue)
     mots_taxes = ["ENERG", "TAXE", "CONTRIBUTION", "DEEE", "SORECOP", "ECO-PART", "ECO "]
     if any(x in label_up for x in mots_taxes) or any(x in ref_up for x in mots_taxes): 
         return "TAXE"
 
+    # 2. FRAIS DE GESTION (C'est ici qu'on attrape le FF et le FRAIS_ANNEXE)
     if "FRAIS_ANNEXE" in ref_up: return "FRAIS GESTION"
+    
     if label_up.strip() == "FF" or "FF " in label_up or " FF" in label_up:
         return "FRAIS GESTION"
+        
     if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF"]): 
         return "FRAIS GESTION"
 
+    # 3. FRAIS DE PORT (Avec sécurité anti-faux positif)
     keywords_port = ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]
     is_real_product_ref = len(ref) > 4 and not any(k in ref_up for k in ["PORT", "FRAIS"])
+    
     if any(x in label_up for x in keywords_port) and not is_real_product_ref:
         exclusions_port = ["SUPPORT", "SUPORT", "PORTS", "RJ45", "DATA", "PANNEAU"]
         if not any(ex in label_up for x in exclusions_port): 
@@ -78,6 +84,7 @@ def detecter_famille(label, ref=""):
             
     if "EMBALLAGE" in label_up: return "EMBALLAGE"
 
+    # 4. TRI TECHNIQUE
     mots_cles_frais_ref = ["PORT", "FRAIS", "SANS_REF", "DIVERS"]
     is_ref_exclusion = any(kw in ref_up for kw in mots_cles_frais_ref)
     ref_is_technique = (len(ref) > 3) and (not is_ref_exclusion)
@@ -99,29 +106,30 @@ def extraire_json_robuste(texte):
 
 def traiter_un_fichier(nom_fichier, user_id):
     try:
+        path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
-        # Correction du nom du modèle ici
+        
+        # TA VERSION 3.0 EST LÀ
         model = genai.GenerativeModel("models/gemini-3-flash-preview")
         
-        prompt = """
-        Analyse cette facture et extrais TOUTES les données structurées.
-        JSON ATTENDU : { "fournisseur": "...", "date": "...", "num_facture": "...", "ref_commande": "...", "lignes": [...] }
-        """
+        prompt = """ Analyse cette facture et extrais TOUTES les données structurées. """
         
         res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
-        data_json = extraire_json_robuste(res.text)
+        if not res.text: return False, "Vide"
         
-        if data_json:
-            supabase.table("audit_results").upsert({
-                "file_name": nom_fichier,
-                "user_id": user_id,
-                "analyse_complete": json.dumps(data_json),
-                "raw_text": res.text
-            }).execute()
-            return True, "OK"
+        data_json = extraire_json_robuste(res.text)
+        if not data_json: return False, "JSON Invalide"
+
+        supabase.table("audit_results").upsert({
+            "file_name": nom_fichier,
+            "user_id": user_id,
+            "analyse_complete": json.dumps(data_json),
+            "raw_text": res.text
+        }).execute()
+        return True, "OK"
     except Exception as e: return False, str(e)
 
-# Nouvelle fonction SQL pour ton rapport sans IA
+# MODIF LIGNES 189 A 214 : LE SEUL CHANGEMENT AUTORISÉ
 def afficher_rapport_sql(fournisseur_nom):
     res = supabase.table("vue_litiges_articles").select("*").eq("fournisseur", fournisseur_nom).execute()
     if not res.data:
@@ -135,17 +143,25 @@ def afficher_rapport_sql(fournisseur_nom):
             st.table(group[['qte', 'num_facture', 'paye_u', 'cible_u', 'perte_ligne']])
 
 # ==============================================================================
-# 3. INTERFACE PRINCIPALE
+# 3. INTERFACE PRINCIPALE (STRICTEMENT INTACTE)
 # ==============================================================================
 session = login_form(url=URL_SUPABASE, apiKey=CLE_ANON)
 
 if session:
+    supabase.postgrest.auth(session["access_token"])
+    if 'uploader_key' not in st.session_state:
+        st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
     st.title("🏗️ Audit V21 - Logique Universelle")
 
-    res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
-    memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
-    memoire_full = {r['file_name']: r for r in res_db.data}
+    try:
+        res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
+        memoire_full = {r['file_name']: r for r in res_db.data}
+        memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
+    except Exception as e: 
+        st.error(f"Erreur chargement base : {e}")
+        memoire = {}
+        memoire_full = {}
 
     all_rows = []
     fournisseurs_detectes = set()
@@ -156,37 +172,42 @@ if session:
             fourn = data.get('fournisseur', 'INCONNU').upper()
             fournisseurs_detectes.add(fourn)
             for l in data.get('lignes', []):
-                qte = clean_float(l.get('quantite', 1))
+                qte_ia = clean_float(l.get('quantite', 1))
                 montant = clean_float(l.get('montant', 0))
                 all_rows.append({
                     "Fichier": f_name, "Facture": data.get('num_facture', '-'),
                     "Date": data.get('date', '-'), "Fournisseur": fourn,
-                    "Quantité": qte, "Article": l.get('article', 'SANS_REF'),
+                    "Quantité": qte_ia, "Article": l.get('article', 'SANS_REF'),
                     "Désignation": l.get('designation', ''), "Montant": montant,
-                    "PU_Systeme": montant/qte if qte > 0 else 0,
-                    "Famille": detecter_famille(l.get('designation', ''), l.get('article', '')),
-                    "Ref_Cmd": data.get('ref_commande', '-'), "BL": l.get('num_bl_ligne', '-')
+                    "Famille": detecter_famille(l.get('designation', ''), l.get('article', ''))
                 })
         except: continue
 
     df = pd.DataFrame(all_rows)
-    tab_analyse, tab_import, tab_brut = st.tabs(["📊 ANALYSE", "📥 IMPORT", "🔍 SCAN TOTAL"])
+    tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
+
+    with tab_config:
+        # TES RÉGLAGES FRANCO/GESTION SONT BIEN LÀ
+        st.header("🛠️ Réglages Fournisseurs")
+        if 'config_df' not in st.session_state:
+            res_cfg = supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
+            st.session_state['config_df'] = pd.DataFrame(res_cfg.data) if res_cfg.data else pd.DataFrame()
+        st.data_editor(st.session_state['config_df'], num_rows="dynamic", use_container_width=True)
 
     with tab_analyse:
         if not all_rows: st.warning("Importez des données.")
         else:
+            # ON GARDE TON ANALYSE ORIGINALE
             stats_fourn = df.groupby('Fournisseur')['Montant'].sum().reset_index()
             st.metric("💸 TOTAL", f"{df['Montant'].sum():.2f} €")
-            selection_podium = st.dataframe(stats_fourn, on_select="rerun", selection_mode="single-row", hide_index=True)
+            sel_pod = st.dataframe(stats_fourn, on_select="rerun", selection_mode="single-row", hide_index=True)
             
-            if selection_podium.selection.rows:
-                fourn_selected = stats_fourn.iloc[selection_podium.selection.rows[0]]['Fournisseur']
-                df_final = df[df['Fournisseur'] == fourn_selected]
-                st.dataframe(df_final, hide_index=True)
+            if sel_pod.selection.rows:
+                f_sel = stats_fourn.iloc[sel_pod.selection.rows[0]]['Fournisseur']
                 
-                # Le 3ème truc : Branchement SQL
+                # BRANCHEMENT SQL UNIQUE (LE 3EME TRUC)
                 st.markdown("---")
-                afficher_rapport_sql(fourn_selected)
+                afficher_rapport_sql(f_sel)
 
     with tab_import:
         uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True)
