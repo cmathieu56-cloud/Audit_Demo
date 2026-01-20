@@ -407,10 +407,21 @@ if session:
                         best_fac = ref_info['Facture']
                         best_date = ref_info['Date']
                         
-                        # 3. LOGIQUE RÉCUPÉRATION (Ajoutée)
+                        # 3. LOGIQUE RÉCUPÉRATION (Avec Sécurité Anti-Crash)
                         best_remise = str(ref_info.get('Remise', '-')) 
-                        best_brut = float(ref_info.get('Prix Brut', 0.0))
-                        curr_brut = float(row['Prix Brut']) if row['Prix Brut'] else 0.0
+                        
+                        try:
+                            # On essaie de convertir, si ça rate on met 0.0
+                            val_temp = ref_info.get('Prix Brut', 0.0)
+                            best_brut = float(str(val_temp).replace(',', '.').strip())
+                        except:
+                            best_brut = 0.0
+                            
+                        curr_brut = 0.0
+                        if row['Prix Brut']:
+                            try:
+                                curr_brut = float(str(row['Prix Brut']).replace(',', '.').strip())
+                            except: pass
 
                         if row['PU_Systeme'] > best_price + 0.005:
                             ecart_u = row['PU_Systeme'] - best_price
@@ -619,3 +630,4 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
