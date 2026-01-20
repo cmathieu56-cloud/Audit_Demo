@@ -182,15 +182,12 @@ def traiter_un_fichier(nom_fichier, user_id):
             "user_id": user_id,
             "analyse_complete": json.dumps(data_json),
             "raw_text": res.text
-        # --- LIGNE DE REPÈRE AVANT ---
-        }).execute()
+       }).execute()
         return True, "OK"
-
-# --- BLOC À CORRIGER ---
     except Exception as e: return False, str(e)
 
-# --- LIGNE DE REPÈRE APRÈS ---
 def afficher_rapport_sql(fournisseur_nom):
+
     # Appel à la vue SQL (Calcul instantané en base)
     res = supabase.table("vue_litiges_articles").select("*").eq("fournisseur", fournisseur_nom).execute()
     
@@ -597,6 +594,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
