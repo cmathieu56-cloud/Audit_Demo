@@ -186,6 +186,33 @@ def traiter_un_fichier(nom_fichier, user_id):
         return True, "OK"
     except Exception as e: return False, str(e)
 
+def generer_rapport_litige(df_anomalies):
+    if df_anomalies is None or df_anomalies.empty:
+        return None
+    rapport = []
+    for article, group in df_anomalies.groupby('Ref'):
+        meilleur_prix = group['Cible (U)'].min()
+        ligne_championne = group[group['Cible (U)'] == meilleur_prix].iloc[0]
+        details_lignes = []
+        for _, row in group.iterrows():
+            details_lignes.append({
+                'Quantité': row['Qte'],
+                'Date': row['Date Facture'],
+                'Facture': row['Num Facture'],
+                'Remise Appliquée': row['Remise'],
+                'Prix Net Payé': row['Payé (U)'],
+                'Perte': round(row['Perte'], 2)
+            })
+        rapport.append({
+            'Article': article,
+            'Designation': ligne_championne['Désignation'],
+            'Meilleur Prix': meilleur_prix,
+            'Date Record': ligne_championne.get('Source Cible', 'N/A'),
+            'Lignes Erreurs': details_lignes,
+            'Total Perte Article': sum(d['Perte'] for d in details_lignes)
+        })
+    return sorted(rapport, key=lambda x: x['Total Perte Article'], reverse=True)
+
 # ==============================================================================
 # 3. INTERFACE PRINCIPALE
 # ==============================================================================
@@ -549,6 +576,19 @@ if session:
                             st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
                         elif "Frais" in row_sel['Motif'] or "Port" in row_sel['Motif']:
                              st.error(f"🚫 **Anomalie Contractuelle :** {row_sel['Motif']}. {row_sel['Détails Techniques']}")
+                            # --- RAPPORT DE LITIGE PAR ARTICLE ---
+                        st.markdown("---")
+                        st.header("🎸 Rapport de Litige par Article")
+                        res_rapport = generer_rapport_litige(df_final)
+                        if res_rapport:
+                            for art in res_rapport:
+                                with st.expander(f"📦 {art['Article']} - {art['Designation']} (Perte : {art['Total Perte Article']:.2f} €)", expanded=True):
+                                    c1, c2, c3 = st.columns(3)
+                                    c1.metric("Record Net", f"{art['Meilleur Prix']:.3f} €")
+                                    c2.write(f"**Meilleure remise historique :** \n {art['Date Record']}")
+                                    c3.metric("TOTAL À RÉCUPÉRER", f"{art['Total Perte Article']:.2f} €", delta_color="inverse")
+                                    df_details = pd.DataFrame(art['Lignes Erreurs'])
+                                    st.table(df_details[['Quantité', 'Date', 'Facture', 'Remise Appliquée', 'Prix Net Payé', 'Perte']])
 
             else:
                 st.success("✅ Clean sheet. Aucune anomalie détectée.")
@@ -630,4 +670,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
