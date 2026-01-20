@@ -5,6 +5,7 @@ import google.generativeai as genai
 import pandas as pd
 import re
 import json
+import concurrent.futures
 import time
 from io import BytesIO
 
@@ -186,6 +187,26 @@ def traiter_un_fichier(nom_fichier, user_id):
         return True, "OK"
     except Exception as e: return False, str(e)
 
+def process_upload_task(file_obj, user_id, existing_files, force_rewrite):
+    # Vérification doublon
+    if file_obj.name in existing_files and not force_rewrite:
+        return False, f"⚠️ {file_obj.name} ignoré (Doublon)"
+    
+    try:
+        # 1. Envoi Supabase
+        supabase.storage.from_("factures_audit").upload(file_obj.name, file_obj.getvalue(), {"upsert": "true"})
+        
+        # 2. Analyse IA
+        ok, msg = traiter_un_fichier(file_obj.name, user_id)
+        
+        if ok:
+            return True, f"✅ {file_obj.name} terminé"
+        else:
+            return False, f"❌ Erreur {file_obj.name} : {msg}"
+            
+    except Exception as e:
+        return False, f"❌ Crash technique sur {file_obj.name} : {str(e)}"
+# ---------------------------------------------------------------
 # ==============================================================================
 # 3. INTERFACE PRINCIPALE
 # ==============================================================================
@@ -587,32 +608,35 @@ if session:
             if uploaded: 
                 if st.button("🚀 LANCER"):
                     barre = st.progress(0)
-                    for i, f in enumerate(uploaded):
-                        with st.status(f"Analyse de {f.name}...", expanded=True) as status_box:
-                            if f.name in memoire and not force_rewrite:
-                                status_box.update(label=f"⚠️ {f.name} ignoré", state="error")
-                            else:
-                                status_box.write("📤 Étape 1 : Envoi vers Supabase...")
-                                try:
-                                    supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                                    status_box.write("🧠 Étape 2 : L'IA calcule (15-20s)...")
-                                    ok, msg = traiter_un_fichier(f.name, user_id)
-                                    
-                                    if ok:
-                                        status_box.update(label=f"✅ {f.name} fini", state="complete", expanded=False)
-                                    else:
-                                        status_box.update(label=f"❌ Erreur {f.name}", state="error")
-                                        st.error(msg)
-                                except Exception as up_err:
-                                    status_box.update(label="❌ Erreur technique", state="error")
-                                    st.error(up_err)
+                    status_area = st.empty() # Zone pour afficher les messages en direct
+                    
+                    # On lance 5 analyses en parallèle (max_workers=5)
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                        # On prépare les tâches
+                        future_to_file = {
+                            executor.submit(process_upload_task, f, user_id, memoire, force_rewrite): f 
+                            for f in uploaded
+                        }
                         
-                        barre.progress((i + 1) / len(uploaded))
+                        completed_count = 0
+                        for future in concurrent.futures.as_completed(future_to_file):
+                            f_name = future_to_file[future].name
+                            try:
+                                ok, msg = future.result()
+                                if ok:
+                                    st.toast(msg, icon="✅")
+                                else:
+                                    st.error(msg)
+                            except Exception as exc:
+                                st.error(f"Erreur thread : {exc}")
+                            
+                            completed_count += 1
+                            barre.progress(completed_count / len(uploaded))
 
+                    st.success("Toutes les analyses sont terminées !")
                     st.session_state['uploader_key'] += 1 
                     time.sleep(1)
                     st.rerun()
-
     with tab_brut:
         st.header("🔍 Scan total des documents")
         if memoire_full:
@@ -623,3 +647,4 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
