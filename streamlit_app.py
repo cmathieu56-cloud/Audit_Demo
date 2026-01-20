@@ -488,12 +488,35 @@ if session:
                         "Motif": motif,
                         "Date Facture": row['Date'],
                         "Source Cible": source_cible,     
-                        "Détails Techniques": detail_tech 
+                        # --- LIGNE DE REPÈRE AVANT ---
+                        "Détails Techniques": detail_tech
+
+# --- BLOC À COLLER ---
                     })
-                    
+            
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
-                "Total_Perte": st.column_config.NumberColumn("Total à Réclamer", format="%.2f €"),
+                total_perte = df_ano['Perte'].sum()
+
+                st.subheader("🏆 Podium des Dettes")
+                stats_fourn = df_ano.groupby('Fournisseur').agg(
+                    Nb_Erreurs=('Perte', 'count'),
+                    Total_Perte=('Perte', 'sum')
+                ).reset_index().sort_values('Total_Perte', ascending=False)
+                
+                c_podium, c_metric = st.columns([2, 1])
+                with c_metric:
+                    st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
+
+                with c_podium:
+                    selection_podium = st.dataframe(
+                        stats_fourn, 
+                        use_container_width=True, 
+                        hide_index=True,
+                        on_select="rerun",
+                        selection_mode="single-row",
+                        column_config={
+                            "Total_Perte": st.column_config.NumberColumn("Total à Réclamer", format="%.2f €"),
                         }
                     )
 
@@ -505,6 +528,8 @@ if session:
                     # APPEL DE LA FONCTION SQL (Analyse rapide)
                     afficher_rapport_sql(fourn_selected)
 
+# --- LIGNE DE REPÈRE APRÈS ---
+    with tab_import:
     with tab_import:
         st.header("📥 Charger")
         col_info, col_drop = st.columns([1, 2])
@@ -571,6 +596,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
