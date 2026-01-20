@@ -358,8 +358,8 @@ if session:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
                 if not df_clean.empty:
                     best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
-                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date']].to_dict('index')
-
+                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
+                    
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
 
@@ -623,5 +623,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
