@@ -567,6 +567,8 @@ if session:
                             st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
                         elif "Frais" in row_sel['Motif'] or "Port" in row_sel['Motif']:
                              st.error(f"🚫 **Anomalie Contractuelle :** {row_sel['Motif']}. {row_sel['Détails Techniques']}")
+                             st.markdown("---")
+                         afficher_rapport_sql(fourn_selected)
                             # --- RAPPORT DE LITIGE PAR ARTICLE ---
                         st.markdown("---")
                         st.header("🎸 Rapport de Litige par Article")
@@ -661,6 +663,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
