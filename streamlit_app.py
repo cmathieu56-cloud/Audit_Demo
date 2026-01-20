@@ -186,32 +186,23 @@ def traiter_un_fichier(nom_fichier, user_id):
         return True, "OK"
     except Exception as e: return False, str(e)
 
-def generer_rapport_litige(df_anomalies):
-    if df_anomalies is None or df_anomalies.empty:
-        return None
-    rapport = []
-    for article, group in df_anomalies.groupby('Ref'):
-        meilleur_prix = group['Cible (U)'].min()
-        ligne_championne = group[group['Cible (U)'] == meilleur_prix].iloc[0]
-        details_lignes = []
-        for _, row in group.iterrows():
-            details_lignes.append({
-                'Quantité': row['Qte'],
-                'Date': row['Date Facture'],
-                'Facture': row['Num Facture'],
-                'Remise Appliquée': row['Remise'],
-                'Prix Net Payé': row['Payé (U)'],
-                'Perte': round(row['Perte'], 2)
-            })
-        rapport.append({
-            'Article': article,
-            'Designation': ligne_championne['Désignation'],
-            'Meilleur Prix': meilleur_prix,
-            'Date Record': ligne_championne.get('Source Cible', 'N/A'),
-            'Lignes Erreurs': details_lignes,
-            'Total Perte Article': sum(d['Perte'] for d in details_lignes)
-        })
-    return sorted(rapport, key=lambda x: x['Total Perte Article'], reverse=True)
+def afficher_rapport_sql(fournisseur_nom):
+    # Appel direct à la vue SQL (Calcul instantané côté base de données)
+    res = supabase.table("vue_litiges_articles").select("*").eq("fournisseur", fournisseur_nom).execute()
+    
+    if not res.data:
+        st.info(f"✅ Aucun litige détecté par SQL pour {fournisseur_nom}.")
+        return
+
+    df_litiges = pd.DataFrame(res.data)
+    st.subheader(f"🎸 Rapport de Litige SQL - {fournisseur_nom}")
+    
+    # Regroupement par article pour un affichage propre
+    for article, group in df_litiges.groupby('ref'):
+        perte_totale = group['perte_ligne'].sum()
+        with st.expander(f"📦 {article} - {group['designation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
+            # On affiche les colonnes essentielles pour ton commercial
+            st.table(group[['qte', 'num_facture', 'paye_u', 'cible_u', 'perte_ligne']])
 
 # ==============================================================================
 # 3. INTERFACE PRINCIPALE
@@ -670,6 +661,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
