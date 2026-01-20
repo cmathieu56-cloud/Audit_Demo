@@ -184,24 +184,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             "raw_text": res.text
         }).execute()
         return True, "OK"
-except Exception as e:
-    return False, str(e)
-
-def afficher_rapport_sql(fournisseur_nom):
-    # Appel à la vue SQL (Calcul instantané en base)
-    res = supabase.table("vue_litiges_articles").select("*").eq("fournisseur", fournisseur_nom).execute()
-    
-    if not res.data:
-        st.info(f"✅ Aucun litige détecté par SQL pour {fournisseur_nom}.")
-        return
-
-    df_litiges = pd.DataFrame(res.data)
-    st.subheader(f"🎸 Rapport de Litige SQL - {fournisseur_nom}")
-    
-    for article, group in df_litiges.groupby('ref'):
-        perte_totale = group['perte_ligne'].sum()
-        with st.expander(f"📦 {article} - {group['designation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
-            st.table(group[['qte', 'num_facture', 'paye_u', 'cible_u', 'perte_ligne']])
+    except Exception as e: return False, str(e)
 
 # ==============================================================================
 # 3. INTERFACE PRINCIPALE
@@ -517,17 +500,70 @@ if session:
                         }
                     )
 
-                # --- Ligne avant (dans tab_analyse) ---
-            if selection_podium.selection.rows:
-                idx_podium = selection_podium.selection.rows[0]
-                fourn_selected = stats_fourn.iloc[idx_podium]['Fournisseur']
-                
-                st.markdown("---")
-                # LE POINT D'ARRIVÉE : L'APPEL SQL UNIQUE
-                afficher_rapport_sql(fourn_selected)
+                if selection_podium.selection.rows:
+                    idx_podium = selection_podium.selection.rows[0]
+                    fourn_selected = stats_fourn.iloc[idx_podium]['Fournisseur']
+                    
+                    st.divider()
+                    st.subheader(f"📉 Preuves pour : {fourn_selected}")
+                    df_final = df_ano[df_ano['Fournisseur'] == fourn_selected]
 
-# --- Ligne après (Fin du bloc tab_analyse) ---
-    with tab_import:
+                    selection_detail = st.dataframe(
+                        df_final,
+                        use_container_width=True,
+                        on_select="rerun",
+                        selection_mode="single-row",
+                        hide_index=True,
+                        column_order=["Date Facture", "Qte", "Ref", "Désignation", "Prix Brut", "Remise", "Remise Cible", "Payé (U)", "Cible (U)", "Perte", "Motif"],
+                        column_config={
+                            "Date Facture": st.column_config.TextColumn("Date", width="small"),
+                            "Qte": st.column_config.NumberColumn("Qte", format="%.0f", width="small"),
+                            "Prix Brut": st.column_config.TextColumn("Brut", width="small"),
+                            "Remise": st.column_config.TextColumn("Remise", width="small"),
+                            "Remise Cible": st.column_config.TextColumn("Remise Cible", width="small"),
+                            "Ref": st.column_config.TextColumn("Ref", width="small"),
+                            "Payé (U)": st.column_config.NumberColumn("Payé (Calc)", format="%.3f €"),
+                            "Cible (U)": st.column_config.NumberColumn("Cible", format="%.3f €"),
+                            "Perte": st.column_config.NumberColumn("Perte", format="%.2f €"),
+                            "Désignation": st.column_config.TextColumn("Désignation", width="medium"),
+                        }
+                    )
+                    
+                    if selection_detail.selection.rows:
+                        idx_det = selection_detail.selection.rows[0]
+                        row_sel = df_final.iloc[idx_det]
+                        
+                        st.info(f"🔎 **{row_sel['Ref']}**")
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Prix Payé (Calc)", f"{row_sel['Payé (U)']:.3f} €")
+                        c2.metric("Meilleur Prix", f"{row_sel['Cible (U)']:.3f} €")
+                        c3.metric("Perte", f"{row_sel['Perte']:.2f} €")
+                        
+                        st.markdown("---")
+                        st.write("🤠 **PIÈCES À CONVICTION :**")
+                        st.write(f"📄 **Facture N° :** `{row_sel['Num Facture']}` (du {row_sel['Date Facture']})")
+                        st.write(f"🚚 **Bon de Livraison :** `{row_sel['BL']}`")
+                        st.write(f"🏗️ **Réf Chantier :** `{row_sel['Ref_Cmd']}`")
+                        
+                        if row_sel['Motif'] == "Hausse Prix":
+                            st.warning(f"📉 **Historique :** C'était moins cher ({row_sel['Cible (U)']:.3f}€) le {row_sel['Source Cible']}. {row_sel['Détails Techniques']}")
+                        elif "Frais" in row_sel['Motif'] or "Port" in row_sel['Motif']:
+                             st.error(f"🚫 **Anomalie Contractuelle :** {row_sel['Motif']}. {row_sel['Détails Techniques']}")
+
+            else:
+                st.success("✅ Clean sheet. Aucune anomalie détectée.")
+            
+            st.divider()
+            with st.expander("📝 Données brutes (Nettoyées)"):
+                # 1. On masque les TAXES pour ne garder que les produits
+                df_view = df[df['Famille'] != 'TAXE']
+                
+                # 2. On masque les colonnes administratives et redondantes
+                cols_inutiles = ['IBAN', 'TVA_Intra', 'Adresse', 'Fournisseur', 'Facture', 'Date', 'Ref_Cmd', 'Fichier']
+                df_view = df_view.drop(columns=cols_inutiles, errors='ignore')
+                
+                st.dataframe(df_view, use_container_width=True)
+
     with tab_import:
         st.header("📥 Charger")
         col_info, col_drop = st.columns([1, 2])
@@ -594,7 +630,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
 
 
