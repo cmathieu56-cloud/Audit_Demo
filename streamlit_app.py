@@ -114,7 +114,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         
-        model = genai.GenerativeModel("gemini-3-flash-preview")
+        model = genai.GenerativeModel("gemini-3.0-flash-preview")
         
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
@@ -358,8 +358,9 @@ if session:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
                 if not df_clean.empty:
                     best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
+                    # 1. MÉMOIRE (Déjà présente dans ton code, je garde)
                     ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
-                    
+
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
 
@@ -377,6 +378,8 @@ if session:
                 cible = 0.0 
                 source_cible = "-"
                 detail_tech = ""
+                # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
+                remise_cible_str = "-" 
                 
                 # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
                 if row['Famille'] == "FRAIS GESTION":
@@ -393,6 +396,7 @@ if session:
                         motif = "Port facturé malgré Franco"
                         cible = 0.0
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
+                        remise_cible_str = "100%"
 
                 # --- LOGIQUE 2 : PRODUITS (Hausse de prix) ---
                 else:
@@ -403,46 +407,38 @@ if session:
                         best_fac = ref_info['Facture']
                         best_date = ref_info['Date']
                         
+                        # 3. LOGIQUE RÉCUPÉRATION (Ajoutée)
+                        best_remise = str(ref_info.get('Remise', '-')) 
+                        best_brut = float(ref_info.get('Prix Brut', 0.0))
+                        curr_brut = float(row['Prix Brut']) if row['Prix Brut'] else 0.0
+
                         if row['PU_Systeme'] > best_price + 0.005:
                             ecart_u = row['PU_Systeme'] - best_price
                             perte = ecart_u * row['Quantité']
                             cible = best_price
                             motif = "Hausse Prix"
                             source_cible = f"{best_date}"
-                            detail_tech = f"(Facture {best_fac})"
+                            
+                            # On stocke la remise texte
+                            remise_cible_str = best_remise
+                            
+                            details = [f"(Facture {best_fac})"]
+                            # ALERTE HAUSSE BRUT
+                            if best_brut > 0 and curr_brut > best_brut + 0.01:
+                                details.append(f"Hausse Tarif Brut ({best_brut:.2f} -> {curr_brut:.2f})")
+                            
+                            detail_tech = " ".join(details)
 
                 if perte > 0.01:
-                    # --- Calcul Remise Cible ---
-                    remise_val = row['Remise']
-                    remise_str = str(remise_val).replace('%', '').strip() if remise_val is not None else "0"
-                    
-                    coef_net = 1.0
-                    for part in remise_str.split('+'):
-                        try:
-                            val = float(part.strip())
-                            coef_net *= (1 - val/100)
-                        except: pass
-                    
-                    p_brut_unitaire_calc = row['PU_Systeme'] / coef_net if coef_net > 0 else row['PU_Systeme']
-                    rem_cible = (1 - (cible / p_brut_unitaire_calc)) * 100 if p_brut_unitaire_calc > 0 else 0
-
-                    # --- Formatage Affichage ---
+                    # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
-                    raw_brut_str = str(row['Prix Brut'])
-                    
-                    if '/' in raw_brut_str:
-                        try:
-                            parts = raw_brut_str.split('/')
-                            val_b = float(parts[0].replace(' ', '').replace(',', '.').strip())
-                            div_b = float(parts[1].replace(' ', '').replace(',', '.').strip())
-                            if div_b > 0:
-                                prix_brut_affiche = val_b / div_b
-                        except: pass
-                    
                     try:
                         val_float = float(str(prix_brut_affiche).replace(' ', '').replace(',', '.'))
                         prix_brut_affiche = f"{val_float:.2f}"
                     except: pass
+                    
+                    if remise_cible_str == "-" and row['Famille'] not in ["FRAIS GESTION", "FRAIS PORT"]:
+                         remise_cible_str = "?"
 
                     anomalies.append({
                         "Fournisseur": fourn,
@@ -454,7 +450,7 @@ if session:
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
-                        "Remise Cible": f"{rem_cible:.1f}", 
+                        "Remise Cible": remise_cible_str, # 4. AFFICHAGE (Corrigé)
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
@@ -623,6 +619,3 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
