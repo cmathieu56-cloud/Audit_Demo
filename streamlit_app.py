@@ -530,7 +530,7 @@ if session:
 
 # --- LIGNE DE REPÈRE APRÈS ---
     with tab_import:
-    with tab_import:
+   
         st.header("📥 Charger")
         col_info, col_drop = st.columns([1, 2])
         
@@ -596,6 +596,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
