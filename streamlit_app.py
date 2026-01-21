@@ -547,21 +547,22 @@ if session:
                             # Récupération des infos de référence pour le titre
                             prix_ref = group['Cible (U)'].iloc[0]
                             date_ref = group['Source Cible'].iloc[0]
+                            remise_ref = group['Remise Cible'].iloc[0] # Récupération du format "60+5"
                             
-                            # Affichage du nom de l'article avec prix et date de référence
-                            st.markdown(f"### 📦 {article} - {group['Désignation'].iloc[0]} | {prix_ref:.4f} € (le {date_ref})")
+                            # Affichage du nom de l'article avec remise identique à la facture
+                            st.markdown(f"### 📦 {article} - {group['Désignation'].iloc[0]} | {prix_ref:.4f} € (Remise: {remise_ref}) (le {date_ref})")
                             
                             st.dataframe(
-                                group[['Num Facture', 'Date Facture', 'Qte', 'Payé (U)', 'Perte']], 
+                                group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']], 
                                 hide_index=True, 
                                 use_container_width=True,
                                 column_config={
                                     "Qte": st.column_config.NumberColumn("Qte", width=10),
+                                    "Remise": st.column_config.TextColumn("Remise"),
                                     "Payé (U)": st.column_config.NumberColumn("Payé (U)", format="%.4f €"),
                                     "Perte": st.column_config.NumberColumn("Perte", format="%.2f €")
                                 }
-                            )
-                                
+                            )   
                     else:
                         st.info(f"✅ Aucune anomalie détectée pour {fourn_selected}.")
 
@@ -633,6 +634,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
