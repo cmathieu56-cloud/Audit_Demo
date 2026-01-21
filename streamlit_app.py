@@ -544,12 +544,17 @@ if session:
                     if not df_litiges_fourn.empty:
                         for article, group in df_litiges_fourn.groupby('Ref'):
                             perte_totale = group['Perte'].sum()
+                            st.markdown(f"### 📦 {article} - {group['Désignation'].iloc[0]}")
+                            
                             st.dataframe(
-                                group[['Num Facture','Date Facture', 'Qte', 'Payé (U)', 'Cible (U)', 'Perte']], 
+                                group[['Num Facture', 'Date Facture', 'Qte', 'Payé (U)', 'Cible (U)', 'Perte']], 
                                 hide_index=True, 
                                 use_container_width=True,
                                 column_config={
-                                    "Qte": st.column_config.NumberColumn("Qte", width=10)
+                                    "Qte": st.column_config.NumberColumn("Qte", width=10),
+                                    "Payé (U)": st.column_config.NumberColumn("Payé (U)", format="%.4f €"),
+                                    "Cible (U)": st.column_config.NumberColumn("Cible (U)", format="%.4f €"),
+                                    "Perte": st.column_config.NumberColumn("Perte", format="%.2f €")
                                 }
                             )
                                 
@@ -624,6 +629,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
