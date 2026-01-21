@@ -501,7 +501,6 @@ if session:
                         # --- LIGNE DE REPÈRE AVANT ---
                         "Détails Techniques": detail_tech
 
-# --- BLOC À COLLER ---
                     })
             
             if anomalies:
@@ -544,7 +543,13 @@ if session:
                     if not df_litiges_fourn.empty:
                         for article, group in df_litiges_fourn.groupby('Ref'):
                             perte_totale = group['Perte'].sum()
-                            st.markdown(f"### 📦 {article} - {group['Désignation'].iloc[0]}")
+                            
+                            # Récupération des infos de référence pour le titre
+                            prix_ref = group['Cible (U)'].iloc[0]
+                            date_ref = group['Source Cible'].iloc[0]
+                            
+                            # Affichage du nom de l'article avec prix et date de référence
+                            st.markdown(f"### 📦 {article} - {group['Désignation'].iloc[0]} | {prix_ref:.4f} € (le {date_ref})")
                             
                             st.dataframe(
                                 group[['Num Facture', 'Date Facture', 'Qte', 'Payé (U)', 'Cible (U)', 'Perte']], 
@@ -561,7 +566,7 @@ if session:
                     else:
                         st.info(f"✅ Aucune anomalie détectée pour {fourn_selected}.")
 
-# --- LIGNE DE REPÈRE APRÈS ---
+
     with tab_import:
    
         st.header("📥 Charger")
@@ -629,6 +634,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
