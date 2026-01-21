@@ -535,7 +535,7 @@ if session:
                         for article, group in df_litiges_fourn.groupby('Ref'):
                             perte_totale = group['Perte'].sum()
                             st.dataframe(group[['Qte', 'Num Facture', 'Payé (U)', 'Cible (U)', 'Perte']], hide_index=True, use_container_width=True)
-                                st.dataframe(group[['Qte', 'Num Facture', 'Payé (U)', 'Cible (U)', 'Perte']])
+                                
                     else:
                         st.info(f"✅ Aucune anomalie détectée pour {fourn_selected}.")
 
@@ -607,6 +607,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
