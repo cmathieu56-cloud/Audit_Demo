@@ -549,7 +549,7 @@ if session:
                                 hide_index=True, 
                                 use_container_width=True,
                                 column_config={
-                                    "Qte": st.column_config.NumberColumn("Qte", width=60)
+                                    "Qte": st.column_config.NumberColumn("Qte", width=30)
                                 }
                             )
                                 
@@ -624,6 +624,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
