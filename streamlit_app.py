@@ -526,7 +526,18 @@ if session:
                     
                     st.divider()
                     # APPEL DE LA FONCTION SQL (Analyse rapide)
-                    afficher_rapport_sql(fourn_selected)
+                    st.subheader(f"📊 Détail des Anomalies (Audit Python) - {fourn_selected}")
+                    
+                    # Filtrage des anomalies calculées en Python pour ce fournisseur
+                    df_litiges_fourn = pd.DataFrame([a for a in anomalies if a['Fournisseur'] == fourn_selected])
+                    
+                    if not df_litiges_fourn.empty:
+                        for article, group in df_litiges_fourn.groupby('Ref'):
+                            perte_totale = group['Perte'].sum()
+                            with st.expander(f"📦 {article} - {group['Désignation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
+                                st.table(group[['Qte', 'Num Facture', 'Payé (U)', 'Cible (U)', 'Perte']])
+                    else:
+                        st.info(f"✅ Aucune anomalie détectée pour {fourn_selected}.")
 
 # --- LIGNE DE REPÈRE APRÈS ---
     with tab_import:
@@ -596,6 +607,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
