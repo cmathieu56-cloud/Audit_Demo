@@ -200,8 +200,8 @@ def afficher_rapport_sql(fournisseur_nom):
     
     for article, group in df_litiges.groupby('ref'):
         perte_totale = group['perte_ligne'].sum()
-        with st.expander(f"📦 {article} - {group['designation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
-            st.table(group[['qte', 'num_facture', 'paye_u', 'cible_u', 'perte_ligne']])
+        with st.expander(f"📦 {article} - {group['Désignation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
+            st.dataframe(
                 group[['Qte', 'Num Facture', 'Payé (U)', 'Cible (U)', 'Perte']],
                 hide_index=True,
                 use_container_width=True,
@@ -535,7 +535,7 @@ if session:
                     
                     st.divider()
                     # APPEL DE LA FONCTION SQL (Analyse rapide)
-                    afficher_rapport_sql(fourn_selected)
+                    st.subheader(f"📊 Détail des Anomalies (Audit Python) - {fourn_selected}")
                     
                     # Filtrage des anomalies calculées en Python pour ce fournisseur
                     df_litiges_fourn = pd.DataFrame([a for a in anomalies if a['Fournisseur'] == fourn_selected])
@@ -634,9 +634,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
 
 
 
