@@ -588,47 +588,48 @@ if session:
 
                     })
             
-            if anomalies:
+           if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
 
-                # --- BLOC PODIUM : MONTANT + % (Le "Combo") ---
+                # --- BLOC PODIUM : MONTANT + % (Header Nettoyé) ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
-                # 1. Dénominateur : Ventes Totales par Année
+                # 1. Dénominateur : Ventes
                 df_ventes = df.copy()
                 df_ventes['Date_DT'] = pd.to_datetime(df_ventes['Date'], errors='coerce')
                 df_ventes['Année'] = df_ventes['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
                 stats_ventes = df_ventes.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
 
-                # 2. Numérateur : Pertes par Année
+                # 2. Numérateur : Pertes
                 df_ano['Date_DT'] = pd.to_datetime(df_ano['Date Facture'], errors='coerce')
                 df_ano['Année'] = df_ano['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
                 stats_pertes = df_ano.groupby(['Fournisseur', 'Année'])['Perte'].sum().reset_index()
 
-                # 3. Fusion et Création de la cellule "Combo"
-                # On joint les ventes et les pertes pour avoir les deux infos sur la même ligne
+                # 3. Fusion et Calcul
                 merge_stats = pd.merge(stats_ventes, stats_pertes, on=['Fournisseur', 'Année'], how='left').fillna(0)
-                
-                # Calcul du %
-                # Si montant 0 (cas rare d'avoirs seuls), on met 0% pour éviter la division par zéro
                 merge_stats['Taux'] = merge_stats.apply(lambda x: (x['Perte'] / x['Montant'] * 100) if x['Montant'] > 0 else 0, axis=1)
                 
-                # Création du texte affiché : "120.50 € (5.2%)"
+                # Cellule "Combo"
                 merge_stats['Affiche'] = merge_stats.apply(
                     lambda x: f"{x['Perte']:.2f} € ({x['Taux']:.1f}%)" if x['Perte'] > 0.01 else "-", 
                     axis=1
                 )
 
-                # 4. Pivot pour l'affichage final
+                # 4. Pivot et NETTOYAGE
                 pivot_combo = merge_stats.pivot(index='Fournisseur', columns='Année', values='Affiche').fillna("-")
                 
-                # Ajout de la colonne "Dette Totale" pour le tri (en argent pur)
+                # --- LA CORRECTION EST ICI ---
+                # On supprime le nom du groupe ("Année") pour que tout remonte sur une seule ligne
+                pivot_combo.columns.name = None 
+                # -----------------------------
+                
+                # Ajout de la colonne Total
                 total_dette_fourn = df_ano.groupby('Fournisseur')['Perte'].sum()
                 pivot_combo.insert(0, "Dette Totale (€)", total_dette_fourn)
                 pivot_combo = pivot_combo.sort_values("Dette Totale (€)", ascending=False)
 
-                # 5. Affichage HTML "Gros Traits"
+                # 5. Affichage HTML
                 c_podium, c_metric = st.columns([2, 1])
                 with c_metric:
                     st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
@@ -640,7 +641,7 @@ if session:
                         'border': '2px solid black', 
                         'color': 'black', 
                         'font-weight': 'bold',
-                        'white-space': 'pre-wrap' # Permet de bien gérer l'espace
+                        'white-space': 'pre-wrap'
                     })\
                     .set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#ffcccb'), ('color', 'black'), ('text-align', 'center'), ('border', '2px solid black')]},
@@ -652,7 +653,7 @@ if session:
                 st.divider()
                 st.subheader("🕵️ Détails par Fournisseur")
 
-                # 6. Boucle Détails (Inchmmodifiée)
+                # 6. Détails
                 for fourn_nom in pivot_combo.index:
                     fourn_dette = total_dette_fourn.get(fourn_nom, 0)
                     
@@ -678,25 +679,6 @@ if session:
                             ]).hide(axis="index").to_html()
                             
                             st.markdown(html_detail, unsafe_allow_html=True)
-                            
-                            # 4. Tableau de détail HTML (Le même style "Cadre Noir" que tu aimes)
-                            sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
-                            
-                            html_detail = sub_df.style.format({
-                                'Payé (U)': "{:.4f} €", 
-                                'Perte': "{:.2f} €"
-                            })\
-                            .set_properties(**{
-                                'text-align': 'center', 
-                                'border': '1px solid black',  # Un peu plus fin pour le détail (1px)
-                                'color': 'black'
-                            })\
-                            .set_table_styles([
-                                {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
-                                {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
-                            ]).hide(axis="index").to_html()
-                            
-                            st.markdown(html_detail, unsafe_allow_html=True)   
                     
 
     with tab_import:
@@ -766,6 +748,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
