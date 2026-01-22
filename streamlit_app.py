@@ -603,21 +603,43 @@ if session:
                     st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
 
                 with c_podium:
-                    selection_podium = st.dataframe(
-                        stats_fourn, 
-                        use_container_width=True, 
-                        hide_index=True,
-                        on_select="rerun",
-                        selection_mode="single-row",
-                        column_config={
-                            "Total_Perte": st.column_config.NumberColumn("Total à Réclamer", format="%.2f €"),
-                        }
-                    )
+                    # --- VERSION HTML (STYLE "GROS TRAITS") ---
+                    # 1. On renomme pour faire joli
+                    df_display = stats_fourn.rename(columns={
+                        'Nb_Erreurs': 'Nombre Anomalies',
+                        'Total_Perte': 'Total à Réclamer'
+                    })
 
-                if selection_podium.selection.rows:
-                    idx_podium = selection_podium.selection.rows[0]
-                    fourn_selected = stats_fourn.iloc[idx_podium]['Fournisseur']
-                    
+                    # 2. Génération du HTML Stylisé
+                    html_podium = df_display.style.format({
+                        'Total à Réclamer': "{:.2f} €"
+                    })\
+                    .set_properties(**{
+                        'text-align': 'center', 
+                        'border': '2px solid black', 
+                        'color': 'black',
+                        'font-weight': 'bold'
+                    })\
+                    .set_table_styles([
+                        {'selector': 'th', 'props': [
+                            ('background-color', '#ffcccb'), # Un petit rouge clair pour l'alerte dette ?
+                            ('color', 'black'), 
+                            ('text-align', 'center'), 
+                            ('border', '2px solid black'),
+                            ('font-size', '16px')
+                        ]},
+                        {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]} 
+                    ]).hide(axis="index").to_html()
+
+                    st.markdown(html_podium, unsafe_allow_html=True)
+                
+                # --- SÉLECTEUR POUR LE DÉTAIL (Remplace le clic tableau) ---
+                st.write("") # Petit espace
+                liste_fournisseurs = stats_fourn['Fournisseur'].tolist()
+                fourn_selected = st.selectbox("🔎 Voir le détail pour :", liste_fournisseurs)
+
+                if fourn_selected:
+                    # On a enlevé la logique "selection_podium.selection.rows" car remplacée par le selectbox
                     st.divider()
                     # APPEL DE LA FONCTION SQL (Analyse rapide)
                     st.subheader(f"📊 Détail des Anomalies (Audit Python) - {fourn_selected}")
@@ -719,6 +741,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
