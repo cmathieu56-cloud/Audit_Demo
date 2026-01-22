@@ -589,6 +589,7 @@ if session:
                     })
             
             # --- MODIFICATION 1 : DÉSINDENTATION (Aligné sous le 'for' principal) ---
+            # --- MODIFICATION 1 : DÉSINDENTATION (Aligné sous le 'for' principal) ---
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
@@ -625,11 +626,17 @@ if session:
                 
                 # Ajout de la colonne Total
                 total_dette_fourn = df_ano.groupby('Fournisseur')['Perte'].sum()
-                pivot_combo.insert(0, "Dette Totale (€)", total_dette_fourn)
+                
+                # --- MODIFICATION 3 : TOTAL À LA FIN (DROITE) ---
+                # On assigne simplement la colonne, Pandas la mettra à la fin par défaut
+                pivot_combo["Dette Totale (€)"] = total_dette_fourn
+                
+                # On trie quand même pour avoir les plus gros montants en haut
                 pivot_combo = pivot_combo.sort_values("Dette Totale (€)", ascending=False)
 
                 # --- MODIFICATION 2 : SUPPRESSION DU LABEL 'FOURNISSEUR' (Ligne rose) ---
-                pivot_combo.index.name = None        
+                pivot_combo.index.name = None
+                
                 # 5. Affichage HTML
                 c_podium, c_metric = st.columns([2, 1])
                 with c_metric:
@@ -749,6 +756,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
