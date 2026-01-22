@@ -109,6 +109,41 @@ def extraire_json_robuste(texte):
     except: pass
     return None
 
+def appliquer_correctifs_specifiques(data, texte_complet):
+    """
+    C'est ici que tu reprends le contrôle manuel.
+    Si l'IA rate un truc connu sur un fournisseur connu, on le force par code.
+    """
+    fourn = data.get('fournisseur', '').upper()
+    
+    # --- CAS SPÉCIFIQUE : YESSS ELECTRIQUE ---
+    # Ils cachent le FF (Frais Facture) en bas dans le tableau de TVA
+    if "YESSS" in fourn:
+        # On cherche le motif "FF" suivi d'un montant (ex: FF 8.99) dans le texte brut
+        # Le regex cherche : FF, espaces, puis des chiffres avec point ou virgule
+        match_ff = re.search(r"FF\s+([\d\.,]+)", texte_complet)
+        
+        if match_ff:
+            montant_ff = clean_float(match_ff.group(1))
+            if montant_ff > 0:
+                # On vérifie si la ligne existe déjà pour pas faire de doublon
+                existe = any(l.get('article') == "FRAIS_ANNEXE" for l in data.get('lignes', []))
+                
+                if not existe:
+                    # On injecte la ligne manuellement
+                    data['lignes'].append({
+                        "quantite": 1,
+                        "article": "FRAIS_ANNEXE",
+                        "designation": "Frais Facturation (Détecté par Script)",
+                        "prix_brut": montant_ff,
+                        "remise": 0,
+                        "prix_net": montant_ff,
+                        "montant": montant_ff,
+                        "num_bl_ligne": "Script"
+                    })
+    
+    return data
+
 def traiter_un_fichier(nom_fichier, user_id):
     try:
         path_storage = f"{user_id}/{nom_fichier}"
@@ -634,6 +669,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
