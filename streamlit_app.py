@@ -148,9 +148,9 @@ def traiter_un_fichier(nom_fichier, user_id):
     try:
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
-        # [MODIFICATION] : Passage à Gemini 2.0 Flash (Stable & Ultra-Rapide) pour le test
+        # [MODIFICATION] : Passage à Gemini 3.0 Flash-preview (Stable & mais lent) la version 2 est trop pourrier pour le test
         # On remplace la version "3-preview" qui lag par la référence de vitesse actuelle.
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3-flash-preview")
         
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
@@ -780,4 +780,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
