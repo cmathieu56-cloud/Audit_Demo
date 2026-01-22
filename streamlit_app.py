@@ -591,8 +591,10 @@ if session:
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
-
+# --- BLOC PODIUM & DÉTAILS (STYLE "GROS TRAITS" PARTOUT) ---
                 st.subheader("🏆 Podium des Dettes")
+                
+                # 1. Calculs
                 stats_fourn = df_ano.groupby('Fournisseur').agg(
                     Nb_Erreurs=('Perte', 'count'),
                     Total_Perte=('Perte', 'sum')
@@ -603,73 +605,64 @@ if session:
                     st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
 
                 with c_podium:
-                    # --- VERSION HTML (STYLE "GROS TRAITS") ---
-                    # 1. On renomme pour faire joli
-                    df_display = stats_fourn.rename(columns={
-                        'Nb_Erreurs': 'Nombre Anomalies',
-                        'Total_Perte': 'Total à Réclamer'
-                    })
-
-                    # 2. Génération du HTML Stylisé
-                    html_podium = df_display.style.format({
-                        'Total à Réclamer': "{:.2f} €"
-                    })\
+                    # 2. Tableau Récapitulatif HTML (Style "Cadre Noir")
+                    df_display = stats_fourn.rename(columns={'Nb_Erreurs': 'Anomalies', 'Total_Perte': 'Dette'})
+                    
+                    html_podium = df_display.style.format({'Dette': "{:.2f} €"})\
                     .set_properties(**{
                         'text-align': 'center', 
                         'border': '2px solid black', 
-                        'color': 'black',
+                        'color': 'black', 
                         'font-weight': 'bold'
                     })\
                     .set_table_styles([
-                        {'selector': 'th', 'props': [
-                            ('background-color', '#ffcccb'), # Un petit rouge clair pour l'alerte dette ?
-                            ('color', 'black'), 
-                            ('text-align', 'center'), 
-                            ('border', '2px solid black'),
-                            ('font-size', '16px')
-                        ]},
-                        {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]} 
+                        {'selector': 'th', 'props': [('background-color', '#ffcccb'), ('color', 'black'), ('text-align', 'center'), ('border', '2px solid black')]},
+                        {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]}
                     ]).hide(axis="index").to_html()
 
                     st.markdown(html_podium, unsafe_allow_html=True)
                 
-                # --- SÉLECTEUR POUR LE DÉTAIL (Remplace le clic tableau) ---
-                st.write("") # Petit espace
-                liste_fournisseurs = stats_fourn['Fournisseur'].tolist()
-                fourn_selected = st.selectbox("🔎 Voir le détail pour :", liste_fournisseurs)
+                st.divider()
+                st.subheader("🕵️ Détails par Fournisseur (Tout le monde est là !)")
 
-                if fourn_selected:
-                    # On a enlevé la logique "selection_podium.selection.rows" car remplacée par le selectbox
-                    st.divider()
-                    # APPEL DE LA FONCTION SQL (Analyse rapide)
-                    st.subheader(f"📊 Détail des Anomalies (Audit Python) - {fourn_selected}")
+                # 3. BOUCLE SUR TOUS LES FOURNISSEURS (Plus de liste déroulante cachée)
+                for idx, row in stats_fourn.iterrows():
+                    fourn_nom = row['Fournisseur']
+                    fourn_dette = row['Total_Perte']
                     
-                    # Filtrage des anomalies calculées en Python pour ce fournisseur
-                    df_litiges_fourn = pd.DataFrame([a for a in anomalies if a['Fournisseur'] == fourn_selected])
-                    
-                    if not df_litiges_fourn.empty:
+                    # On ouvre le premier par défaut, les autres sont fermés pour gagner de la place
+                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=(idx == 0)):
+                        
+                        df_litiges_fourn = pd.DataFrame([a for a in anomalies if a['Fournisseur'] == fourn_nom])
+                        
+                        # Boucle sur les articles de ce fournisseur
                         for article, group in df_litiges_fourn.groupby('Ref'):
-                            perte_totale = group['Perte'].sum()
-                            
-                            # Récupération des infos de référence pour le titre
+                            # Infos de référence
                             prix_ref = group['Cible (U)'].iloc[0]
                             date_ref = group['Source Cible'].iloc[0]
-                            remise_ref = group['Remise Cible'].iloc[0] # Récupération du format "60+5"
+                            remise_ref = group['Remise Cible'].iloc[0]
+                            nom_art = group['Désignation'].iloc[0]
+
+                            st.markdown(f"**📦 {article}** - {nom_art} | Cible: **{prix_ref:.4f} €** (Remise {remise_ref}) au {date_ref}")
                             
-                            # Affichage du nom de l'article avec remise identique à la facture
-                            st.markdown(f"### 📦 {article} - {group['Désignation'].iloc[0]} | {prix_ref:.4f} € (Remise: {remise_ref}) (le {date_ref})")
+                            # 4. Tableau de détail HTML (Le même style "Cadre Noir" que tu aimes)
+                            sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
                             
-                            st.dataframe(
-                                group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']], 
-                                hide_index=True, 
-                                use_container_width=True,
-                                column_config={
-                                    "Qte": st.column_config.NumberColumn("Qte", width=10),
-                                    "Remise": st.column_config.TextColumn("Remise"),
-                                    "Payé (U)": st.column_config.NumberColumn("Payé (U)", format="%.4f €"),
-                                    "Perte": st.column_config.NumberColumn("Perte", format="%.2f €")
-                                }
-                            )   
+                            html_detail = sub_df.style.format({
+                                'Payé (U)': "{:.4f} €", 
+                                'Perte': "{:.2f} €"
+                            })\
+                            .set_properties(**{
+                                'text-align': 'center', 
+                                'border': '1px solid black',  # Un peu plus fin pour le détail (1px)
+                                'color': 'black'
+                            })\
+                            .set_table_styles([
+                                {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
+                                {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
+                            ]).hide(axis="index").to_html()
+                            
+                            st.markdown(html_detail, unsafe_allow_html=True)   
                     else:
                         st.info(f"✅ Aucune anomalie détectée pour {fourn_selected}.")
 
@@ -741,6 +734,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
