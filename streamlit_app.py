@@ -418,14 +418,14 @@ if session:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
         else:
-            # --- DEBUT AJOUT : TABLEAU DE BORD ACHATS (VERSION CENTRÉE) ---
+            # --- DEBUT AJOUT : TABLEAU DE BORD (GRILLE ÉPAISSE) ---
             st.subheader("📈 Synthèse des Achats par Année")
             
-            # 1. Préparation des données
+            # 1. Préparation
             df_calc = df.copy()
             df_calc['Date_Ref'] = pd.to_datetime(df_calc['Date'], errors='coerce')
             
-            # 2. Extraction Année
+            # 2. Année
             df_calc['Année'] = df_calc['Date_Ref'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
 
             # 3. Pivot
@@ -436,13 +436,18 @@ if session:
                 matrice_achats['TOTAL PÉRIODE'] = matrice_achats.sum(axis=1)
                 matrice_achats = matrice_achats.sort_values('TOTAL PÉRIODE', ascending=False)
                 
-                # 4. Affichage STYLE (Centré)
-                # On utilise .style pour forcer l'alignement au centre des entêtes et des cellules
+                # 4. Affichage STYLE (Bordures Épaisses)
                 st.dataframe(
                     matrice_achats.style
                     .format("{:.2f} €")
-                    .set_properties(**{'text-align': 'center'})
-                    .set_table_styles([dict(selector='th', props=[('text-align', 'center')])]),
+                    .set_properties(**{
+                        'text-align': 'center', 
+                        'border': '2px solid black',      # <-- GROS TRAIT ICI
+                        'color': 'black'
+                    })
+                    .set_table_styles([
+                        {'selector': 'th', 'props': [('text-align', 'center'), ('border', '2px solid black')]} # <-- ET ICI
+                    ]),
                     use_container_width=True
                 )
                 st.divider()
@@ -703,6 +708,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
