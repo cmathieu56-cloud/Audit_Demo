@@ -535,7 +535,7 @@ if session:
                     
                     st.divider()
                     # APPEL DE LA FONCTION SQL (Analyse rapide)
-                    st.subheader(f"📊 Détail des Anomalies (Audit Python) - {fourn_selected}")
+                    afficher_rapport_sql(fourn_selected)
                     
                     # Filtrage des anomalies calculées en Python pour ce fournisseur
                     df_litiges_fourn = pd.DataFrame([a for a in anomalies if a['Fournisseur'] == fourn_selected])
@@ -634,6 +634,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
