@@ -418,35 +418,32 @@ if session:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
         else:
-            # --- DEBUT AJOUT : TABLEAU DE BORD ACHATS (VERSION PRO) ---
+            # --- DEBUT AJOUT : TABLEAU DE BORD ACHATS (VERSION CENTRÉE) ---
             st.subheader("📈 Synthèse des Achats par Année")
             
-            # 1. Préparation des données (Copie pour ne pas casser la suite)
+            # 1. Préparation des données
             df_calc = df.copy()
             df_calc['Date_Ref'] = pd.to_datetime(df_calc['Date'], errors='coerce')
             
-            # 2. Extraction Année (Si erreur de date -> 'Inconnue')
+            # 2. Extraction Année
             df_calc['Année'] = df_calc['Date_Ref'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
 
-            # 3. Groupement (Fournisseur / Année)
+            # 3. Pivot
             df_pivot = df_calc.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
             
-            # 4. Pivot (Lignes=Fournisseurs, Colonnes=Années)
             if not df_pivot.empty:
                 matrice_achats = df_pivot.pivot(index='Fournisseur', columns='Année', values='Montant').fillna(0)
-                
-                # Ajout du Grand Total
                 matrice_achats['TOTAL PÉRIODE'] = matrice_achats.sum(axis=1)
                 matrice_achats = matrice_achats.sort_values('TOTAL PÉRIODE', ascending=False)
                 
-                # 5. Affichage dynamique (Format € sur toutes les colonnes)
+                # 4. Affichage STYLE (Centré)
+                # On utilise .style pour forcer l'alignement au centre des entêtes et des cellules
                 st.dataframe(
-                    matrice_achats,
-                    use_container_width=True,
-                    column_config={
-                        c: st.column_config.NumberColumn(format="%.2f €") 
-                        for c in matrice_achats.columns
-                    }
+                    matrice_achats.style
+                    .format("{:.2f} €")
+                    .set_properties(**{'text-align': 'center'})
+                    .set_table_styles([dict(selector='th', props=[('text-align', 'center')])]),
+                    use_container_width=True
                 )
                 st.divider()
             # --- FIN AJOUT ---
@@ -706,6 +703,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
