@@ -418,17 +418,15 @@ if session:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
         else:
-            # --- DEBUT AJOUT : TABLEAU DE BORD (GRILLE ÉPAISSE) ---
+            # --- DEBUT AJOUT : TABLEAU HTML (FORCE BRUTE POUR LE STYLE) ---
             st.subheader("📈 Synthèse des Achats par Année")
             
             # 1. Préparation
             df_calc = df.copy()
             df_calc['Date_Ref'] = pd.to_datetime(df_calc['Date'], errors='coerce')
-            
-            # 2. Année
             df_calc['Année'] = df_calc['Date_Ref'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
 
-            # 3. Pivot
+            # 2. Pivot
             df_pivot = df_calc.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
             
             if not df_pivot.empty:
@@ -436,22 +434,35 @@ if session:
                 matrice_achats['TOTAL PÉRIODE'] = matrice_achats.sum(axis=1)
                 matrice_achats = matrice_achats.sort_values('TOTAL PÉRIODE', ascending=False)
                 
-                # 4. Affichage STYLE (Bordures Épaisses)
-                st.dataframe(
-                    matrice_achats.style
-                    .format("{:.2f} €")
+                # 3. Génération HTML avec CSS FORCÉ (Bordures noires 2px)
+                # On utilise to_html pour contourner les limitations de st.dataframe
+                html_code = matrice_achats.style.format("{:.2f} €")\
                     .set_properties(**{
                         'text-align': 'center', 
-                        'border': '2px solid black',      # <-- GROS TRAIT ICI
-                        'color': 'black'
-                    })
+                        'border': '2px solid black', 
+                        'color': 'black',
+                        'font-weight': 'bold'
+                    })\
                     .set_table_styles([
-                        {'selector': 'th', 'props': [('text-align', 'center'), ('border', '2px solid black')]} # <-- ET ICI
-                    ]),
-                    use_container_width=True
-                )
+                        # Entêtes (Th) en gris clair avec bordure noire
+                        {'selector': 'th', 'props': [
+                            ('background-color', '#e0e0e0'), 
+                            ('color', 'black'), 
+                            ('text-align', 'center'), 
+                            ('border', '2px solid black'),
+                            ('font-size', '16px')
+                        ]},
+                        # Le tableau global
+                        {'selector': 'table', 'props': [
+                            ('border-collapse', 'collapse'),
+                            ('width', '100%')
+                        ]}
+                    ]).to_html()
+                
+                # Injection du HTML
+                st.markdown(html_code, unsafe_allow_html=True)
                 st.divider()
-            # --- FIN AJOUT ---
+                # --- FIN AJOUT ---
 
             df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
@@ -708,6 +719,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
