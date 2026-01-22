@@ -663,9 +663,7 @@ if session:
                             ]).hide(axis="index").to_html()
                             
                             st.markdown(html_detail, unsafe_allow_html=True)   
-                    else:
-                        st.info(f"✅ Aucune anomalie détectée pour {fourn_selected}.")
-
+                    
 
     with tab_import:
    
@@ -734,6 +732,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
