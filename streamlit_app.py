@@ -587,9 +587,7 @@ if session:
                         "Détails Techniques": detail_tech
 
                     })
-                    })
-            
-            # --- CORRECTION ICI : ON RECULE VERS LA GAUCHE ---
+                
                         
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
@@ -751,6 +749,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
