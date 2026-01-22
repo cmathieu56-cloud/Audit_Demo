@@ -588,11 +588,13 @@ if session:
 
                     })
             
-                     if anomalies:
+            # [CORRECTION] : On désindente ici (Shift+Tab).
+            # Ce 'if' doit être aligné verticalement avec le 'for idx, row...' tout là-haut.
+            if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
 
-                # --- BLOC PODIUM : MONTANT + % (Header Nettoyé) ---
+                # --- BLOC PODIUM : MONTANT + % ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
                 # 1. Dénominateur : Ventes
@@ -610,49 +612,49 @@ if session:
                 merge_stats = pd.merge(stats_ventes, stats_pertes, on=['Fournisseur', 'Année'], how='left').fillna(0)
                 merge_stats['Taux'] = merge_stats.apply(lambda x: (x['Perte'] / x['Montant'] * 100) if x['Montant'] > 0 else 0, axis=1)
                 
-                # Cellule "Combo"
+                # Cellule "Combo" (Texte pour l'affichage)
                 merge_stats['Affiche'] = merge_stats.apply(
                     lambda x: f"{x['Perte']:.2f} € ({x['Taux']:.1f}%)" if x['Perte'] > 0.01 else "-", 
                     axis=1
                 )
 
-                # 4. Pivot et NETTOYAGE
+                # 4. Pivot
                 pivot_combo = merge_stats.pivot(index='Fournisseur', columns='Année', values='Affiche').fillna("-")
-                pivot_combo.columns.name = None 
                 
-                # Ajout de la colonne Total (Floats pour le tri)
+                # Ajout de la colonne Total (Floats pour le tri) à la FIN (Droite)
                 total_dette_fourn = df_ano.groupby('Fournisseur')['Perte'].sum()
                 pivot_combo["Dette Totale (€)"] = total_dette_fourn
                 
-                # On trie D'ABORD les fournisseurs
+                # On trie les fournisseurs par dette décroissante
                 pivot_combo = pivot_combo.sort_values("Dette Totale (€)", ascending=False)
 
-                # --- AJOUT LIGNE TOTAL (BAS DE TABLEAU) ---
-                total_row = {"Dette Totale (€)": total_perte} # Le grand total float
+                # --- AJOUT LIGNE TOTAL GÉNÉRAL (BAS DE TABLEAU) ---
+                row_total = {"Dette Totale (€)": total_perte}
                 
-                # Calcul des totaux par année (Montant + %)
-                for col_annee in [c for c in pivot_combo.columns if c != "Dette Totale (€)"]:
+                # Calcul des totaux par année (pour avoir les bons %)
+                cols_annee = [c for c in pivot_combo.columns if c != "Dette Totale (€)"]
+                for c_annee in cols_annee:
                     # On filtre les stats brutes pour l'année concernée
-                    data_annee = merge_stats[merge_stats['Année'] == col_annee]
-                    sum_perte = data_annee['Perte'].sum()
-                    sum_montant = data_annee['Montant'].sum()
+                    sub = merge_stats[merge_stats['Année'] == c_annee]
+                    sum_p = sub['Perte'].sum()
+                    sum_m = sub['Montant'].sum()
                     
-                    if sum_montant > 0:
-                        taux_global = (sum_perte / sum_montant) * 100
-                        val_str = f"{sum_perte:.2f} € ({taux_global:.1f}%)"
-                    elif sum_perte > 0:
-                        val_str = f"{sum_perte:.2f} € (-)"
+                    if sum_m > 0:
+                        t_glo = (sum_p / sum_m) * 100
+                        row_total[c_annee] = f"{sum_p:.2f} € ({t_glo:.1f}%)"
+                    elif sum_p > 0:
+                         row_total[c_annee] = f"{sum_p:.2f} € (-)"
                     else:
-                        val_str = "-"
-                    
-                    total_row[col_annee] = val_str
+                         row_total[c_annee] = "-"
 
                 # Insertion de la ligne TOTAL en bas
-                df_total_row = pd.DataFrame([total_row], index=["TOTAL GÉNÉRAL"])
+                df_total_row = pd.DataFrame([row_total], index=["TOTAL GÉNÉRAL"])
                 pivot_combo = pd.concat([pivot_combo, df_total_row])
 
                 # --- FINITION ---
+                # Suppression des noms d'index parasites (Ligne rose)
                 pivot_combo.index.name = None
+                pivot_combo.columns.name = None
                 
                 # 5. Affichage HTML
                 c_podium, c_metric = st.columns([2, 1])
@@ -773,6 +775,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
