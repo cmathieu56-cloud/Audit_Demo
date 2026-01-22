@@ -200,8 +200,8 @@ def afficher_rapport_sql(fournisseur_nom):
     
     for article, group in df_litiges.groupby('ref'):
         perte_totale = group['perte_ligne'].sum()
-        with st.expander(f"📦 {article} - {group['Désignation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
-            st.dataframe(
+        with st.expander(f"📦 {article} - {group['designation'].iloc[0]} (Perte : {perte_totale:.2f} €)", expanded=True):
+            st.table(group[['qte', 'num_facture', 'paye_u', 'cible_u', 'perte_ligne']])
                 group[['Qte', 'Num Facture', 'Payé (U)', 'Cible (U)', 'Perte']],
                 hide_index=True,
                 use_container_width=True,
@@ -634,6 +634,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
