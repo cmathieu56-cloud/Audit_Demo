@@ -681,7 +681,11 @@ if session:
                 st.subheader("🕵️ Détails par Fournisseur")
         
                 # 6. Détails
+               # 6. Détails
                 for fourn_nom in pivot_combo.index:
+                    # [CORRECTION] : On ignore la ligne de total pour les dossiers détails
+                    if fourn_nom == "TOTAL GÉNÉRAL": continue
+                    
                     fourn_dette = total_dette_fourn.get(fourn_nom, 0)
                     
                     with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=False):
@@ -775,6 +779,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
