@@ -587,12 +587,12 @@ if session:
                         "Détails Techniques": detail_tech
 
                     })
-                
-                        
+            
+            # --- MODIFICATION 1 : DÉSINDENTATION (Aligné sous le 'for' principal) ---
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
-        
+
                 # --- BLOC PODIUM : MONTANT + % (Header Nettoyé) ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
@@ -601,12 +601,12 @@ if session:
                 df_ventes['Date_DT'] = pd.to_datetime(df_ventes['Date'], errors='coerce')
                 df_ventes['Année'] = df_ventes['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
                 stats_ventes = df_ventes.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
-        
+
                 # 2. Numérateur : Pertes
                 df_ano['Date_DT'] = pd.to_datetime(df_ano['Date Facture'], errors='coerce')
                 df_ano['Année'] = df_ano['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
                 stats_pertes = df_ano.groupby(['Fournisseur', 'Année'])['Perte'].sum().reset_index()
-        
+
                 # 3. Fusion et Calcul
                 merge_stats = pd.merge(stats_ventes, stats_pertes, on=['Fournisseur', 'Année'], how='left').fillna(0)
                 merge_stats['Taux'] = merge_stats.apply(lambda x: (x['Perte'] / x['Montant'] * 100) if x['Montant'] > 0 else 0, axis=1)
@@ -616,20 +616,20 @@ if session:
                     lambda x: f"{x['Perte']:.2f} € ({x['Taux']:.1f}%)" if x['Perte'] > 0.01 else "-", 
                     axis=1
                 )
-        
+
                 # 4. Pivot et NETTOYAGE
                 pivot_combo = merge_stats.pivot(index='Fournisseur', columns='Année', values='Affiche').fillna("-")
                 
-                # --- LA CORRECTION EST ICI ---
                 # On supprime le nom du groupe ("Année") pour que tout remonte sur une seule ligne
                 pivot_combo.columns.name = None 
-                # -----------------------------
                 
                 # Ajout de la colonne Total
                 total_dette_fourn = df_ano.groupby('Fournisseur')['Perte'].sum()
                 pivot_combo.insert(0, "Dette Totale (€)", total_dette_fourn)
                 pivot_combo = pivot_combo.sort_values("Dette Totale (€)", ascending=False)
-        
+
+                # --- MODIFICATION 2 : SUPPRESSION DU LABEL 'FOURNISSEUR' (Ligne rose) ---
+                pivot_combo.index.name = None        
                 # 5. Affichage HTML
                 c_podium, c_metric = st.columns([2, 1])
                 with c_metric:
@@ -749,6 +749,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
