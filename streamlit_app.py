@@ -591,59 +591,93 @@ if session:
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
-# --- BLOC PODIUM & DÉTAILS (STYLE "GROS TRAITS" PARTOUT) ---
-                st.subheader("🏆 Podium des Dettes")
+
+                # --- BLOC PODIUM : MONTANT + % (Le "Combo") ---
+                st.subheader("🏆 Podium des Dettes & Évolution")
                 
-                # 1. Calculs
-                stats_fourn = df_ano.groupby('Fournisseur').agg(
-                    Nb_Erreurs=('Perte', 'count'),
-                    Total_Perte=('Perte', 'sum')
-                ).reset_index().sort_values('Total_Perte', ascending=False)
+                # 1. Dénominateur : Ventes Totales par Année
+                df_ventes = df.copy()
+                df_ventes['Date_DT'] = pd.to_datetime(df_ventes['Date'], errors='coerce')
+                df_ventes['Année'] = df_ventes['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
+                stats_ventes = df_ventes.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
+
+                # 2. Numérateur : Pertes par Année
+                df_ano['Date_DT'] = pd.to_datetime(df_ano['Date Facture'], errors='coerce')
+                df_ano['Année'] = df_ano['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
+                stats_pertes = df_ano.groupby(['Fournisseur', 'Année'])['Perte'].sum().reset_index()
+
+                # 3. Fusion et Création de la cellule "Combo"
+                # On joint les ventes et les pertes pour avoir les deux infos sur la même ligne
+                merge_stats = pd.merge(stats_ventes, stats_pertes, on=['Fournisseur', 'Année'], how='left').fillna(0)
                 
+                # Calcul du %
+                # Si montant 0 (cas rare d'avoirs seuls), on met 0% pour éviter la division par zéro
+                merge_stats['Taux'] = merge_stats.apply(lambda x: (x['Perte'] / x['Montant'] * 100) if x['Montant'] > 0 else 0, axis=1)
+                
+                # Création du texte affiché : "120.50 € (5.2%)"
+                merge_stats['Affiche'] = merge_stats.apply(
+                    lambda x: f"{x['Perte']:.2f} € ({x['Taux']:.1f}%)" if x['Perte'] > 0.01 else "-", 
+                    axis=1
+                )
+
+                # 4. Pivot pour l'affichage final
+                pivot_combo = merge_stats.pivot(index='Fournisseur', columns='Année', values='Affiche').fillna("-")
+                
+                # Ajout de la colonne "Dette Totale" pour le tri (en argent pur)
+                total_dette_fourn = df_ano.groupby('Fournisseur')['Perte'].sum()
+                pivot_combo.insert(0, "Dette Totale (€)", total_dette_fourn)
+                pivot_combo = pivot_combo.sort_values("Dette Totale (€)", ascending=False)
+
+                # 5. Affichage HTML "Gros Traits"
                 c_podium, c_metric = st.columns([2, 1])
                 with c_metric:
                     st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
 
                 with c_podium:
-                    # 2. Tableau Récapitulatif HTML (Style "Cadre Noir")
-                    df_display = stats_fourn.rename(columns={'Nb_Erreurs': 'Anomalies', 'Total_Perte': 'Dette'})
-                    
-                    html_podium = df_display.style.format({'Dette': "{:.2f} €"})\
+                    html_podium = pivot_combo.style.format({'Dette Totale (€)': "{:.2f} €"})\
                     .set_properties(**{
                         'text-align': 'center', 
                         'border': '2px solid black', 
                         'color': 'black', 
-                        'font-weight': 'bold'
+                        'font-weight': 'bold',
+                        'white-space': 'pre-wrap' # Permet de bien gérer l'espace
                     })\
                     .set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#ffcccb'), ('color', 'black'), ('text-align', 'center'), ('border', '2px solid black')]},
                         {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]}
-                    ]).hide(axis="index").to_html()
+                    ]).to_html()
 
                     st.markdown(html_podium, unsafe_allow_html=True)
                 
                 st.divider()
-                st.subheader("🕵️ Détails par Fournisseur (Tout le monde est là !)")
+                st.subheader("🕵️ Détails par Fournisseur")
 
-                # 3. BOUCLE SUR TOUS LES FOURNISSEURS (Plus de liste déroulante cachée)
-                for idx, row in stats_fourn.iterrows():
-                    fourn_nom = row['Fournisseur']
-                    fourn_dette = row['Total_Perte']
+                # 6. Boucle Détails (Inchmmodifiée)
+                for fourn_nom in pivot_combo.index:
+                    fourn_dette = total_dette_fourn.get(fourn_nom, 0)
                     
-                    # On ouvre le premier par défaut, les autres sont fermés pour gagner de la place
-                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=(idx == 0)):
+                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=False):
+                        df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
                         
-                        df_litiges_fourn = pd.DataFrame([a for a in anomalies if a['Fournisseur'] == fourn_nom])
-                        
-                        # Boucle sur les articles de ce fournisseur
                         for article, group in df_litiges_fourn.groupby('Ref'):
-                            # Infos de référence
                             prix_ref = group['Cible (U)'].iloc[0]
                             date_ref = group['Source Cible'].iloc[0]
                             remise_ref = group['Remise Cible'].iloc[0]
                             nom_art = group['Désignation'].iloc[0]
 
                             st.markdown(f"**📦 {article}** - {nom_art} | Cible: **{prix_ref:.4f} €** (Remise {remise_ref}) au {date_ref}")
+                            
+                            sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
+                            html_detail = sub_df.style.format({'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})\
+                            .set_properties(**{
+                                'text-align': 'center', 'border': '1px solid black', 'color': 'black'
+                            })\
+                            .set_table_styles([
+                                {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
+                                {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
+                            ]).hide(axis="index").to_html()
+                            
+                            st.markdown(html_detail, unsafe_allow_html=True)
                             
                             # 4. Tableau de détail HTML (Le même style "Cadre Noir" que tu aimes)
                             sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
@@ -732,6 +766,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
