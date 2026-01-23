@@ -552,7 +552,7 @@ if session:
                             if best_remise_v > curr_remise_v + 0.1:
                                 motif = "Baisse de Remise"
                                 source_cible = f"{best_date}"
-                                remise_cible_str = ref_info['Remise']
+                                remise_cible_str = f"{best_remise_v:g}%"
                                 
                                 # Si Remise Actuelle = 0 (mais prix plus cher que l'histoire), on compare au Prix Net Historique
                                 if curr_remise_v < 1:
@@ -803,6 +803,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
