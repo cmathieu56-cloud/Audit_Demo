@@ -6,7 +6,10 @@ import pandas as pd
 import re
 import json
 import time
+import os  # <--- INDISPENSABLE POUR LE REGISTRE
+from datetime import datetime # <--- INDISPENSABLE POUR LA DATE
 from io import BytesIO
+
 
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
@@ -878,6 +881,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
