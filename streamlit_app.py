@@ -371,6 +371,7 @@ if session:
                     "Désignation": l.get('designation', ''),
                     "Prix Brut": raw_brut,
                     "Remise": remise,
+                    "Remise_Val": remise_val,
                     "Prix Net": p_net, 
                     "Montant": montant,
                     "PU_Systeme": pu_systeme,
@@ -793,6 +794,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
