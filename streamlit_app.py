@@ -484,9 +484,11 @@ if session:
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
                 if not df_clean.empty:
-                    best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
-                    # 1. MÉMOIRE (Déjà présente dans ton code, je garde)
-                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
+                    # CHANGEMENT ICI : On trie par Remise_Val (la plus haute en premier)
+                    best_rows = df_clean.sort_values('Remise_Val', ascending=False).drop_duplicates('Article', keep='first')
+                    
+                    # On stocke Remise_Val dans la mémoire pour pouvoir comparer plus tard
+                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Remise_Val', 'Prix Brut']].to_dict('index')
 
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
@@ -794,6 +796,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
