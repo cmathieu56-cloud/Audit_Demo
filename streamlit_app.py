@@ -501,17 +501,14 @@ if session:
             ref_map = {}
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF'].copy()
-                
-                # On prépare les valeurs pour le tri
                 df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
                 
                 for art, group in df_clean.groupby('Article'):
-                    # 1. On cherche la meilleure remise (sur une ligne où le Brut est exploitable)
+                    # Records
                     valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
                     best_r_row = valid_remises.iloc[0] if not valid_remises.empty else group.iloc[0]
                     
-                    # 2. On cherche le meilleur prix unitaire net absolu
-                    valid_prices = group[group['PU_Systeme'] > 0.001].sort_values('PU_Systeme', ascending=True)
+                    valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True)
                     best_p_row = valid_prices.iloc[0] if not valid_prices.empty else group.iloc[0]
 
                     ref_map[art] = {
@@ -520,8 +517,7 @@ if session:
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': best_r_row['Date'],
-                        'Date_Price': best_p_row['Date'],
-                        'Fac_Remise': best_r_row['Facture']
+                        'Date_Price': best_p_row['Date']
                     }
             
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
@@ -561,46 +557,40 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Basée sur le % de Remise) ---
+                # --- LOGIQUE HYBRIDE V3 : LE NET EST JUGE ---
                 else:
                     art = row['Article']
                     remise_actuelle = clean_float(str(row['Remise']).replace('%', ''))
                     pu_paye = row['PU_Systeme']
-                    brut_actuel = clean_float(row['Prix Brut'])
                     
                     if art in ref_map and art != 'SANS_REF':
                         m = ref_map[art]
-                        best_r = m['Best_Remise']
                         
-                        # CAS 1 : MODE REMISE (Le produit a une remise historique connue)
-                        if best_r > 0:
-                            # SI LA REMISE EST RESPECTÉE -> PERTE = 0 (Peu importe le prix)
-                            # On met une tolérance de 0.1 pour les arrondis
-                            if remise_actuelle >= best_r - 0.1:
-                                perte = 0
-                            else:
-                                # SI LA REMISE A CHUTÉ (ou Magouille OBOB)
-                                # On gère la magouille : si brut actuel est < 50% du brut hist, on prend l'historique
-                                ref_brut_calcul = brut_actuel
-                                if m['Best_Brut_Associe'] > 0 and (brut_actuel / m['Best_Brut_Associe']) < 0.5:
-                                    ref_brut_calcul = m['Best_Brut_Associe']
-                                
-                                cible = ref_brut_calcul * (1 - best_r / 100)
-                                if pu_paye > cible + 0.05:
-                                    perte = (pu_paye - cible) * row['Quantité']
-                                    motif = "Chute Remise"
-                                    source_cible = m['Date_Remise']
-                                    remise_cible_str = f"{best_r:g}%"
-
-                        # CAS 2 : MODE PRIX NET (Pas de remise catalogue connue)
+                        # REGLE 1 : SECURITE ABSOLUE (Berner)
+                        # Si on paye le prix record ou moins, perte = 0
+                        if pu_paye <= m['Best_Price_Net'] + 0.05:
+                            perte = 0
+                        
+                        # REGLE 2 : RESPECT DE LA REMISE (Thermor)
+                        elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
+                            perte = 0
+                            
+                        # REGLE 3 : CALCUL DE LA PERTE
                         else:
-                            best_p = m['Best_Price_Net']
-                            if best_p > 0.001 and pu_paye > best_p + 0.01:
-                                perte = (pu_paye - best_p) * row['Quantité']
-                                motif = "Hausse Prix Net"
-                                cible = best_p
-                                source_cible = m['Date_Price']
-                                detail_tech = f"(Ancien prix: {best_p:.2f}€)"
+                            # On cherche la meilleure cible possible entre le prix record et la remise théorique
+                            cible_remise = 999999.0
+                            if m['Best_Brut_Associe'] > 0:
+                                cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
+                                if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
+                                    cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
+                            
+                            cible = min(m['Best_Price_Net'], cible_remise)
+                            
+                            if pu_paye > cible + 0.05:
+                                perte = (pu_paye - cible) * row['Quantité']
+                                motif = "Hausse de prix"
+                                source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
+                                remise_cible_str = f"{m['Best_Remise']:g}%"
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -750,17 +740,13 @@ if session:
                                     # NOUVEAU TITRE : Focus 100% sur la Remise
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}** (Vu le {date_ref})")
                                     
-                                    # --- CONTROLE ANTI-ARNAQUE (Ecart > 15%) ---
+                                    # --- ALERTE ARNAQUE FOURNISSEUR ---
                                     if article in ref_map:
                                         m = ref_map[article]
-                                        p_ref_remise = m.get('Price_At_Best_Remise', 0)
-                                        p_record_abs = m.get('Best_Price_Net', 0)
-                                        
-                                        if p_record_abs > 0 and p_ref_remise > (p_record_abs * 1.15):
-                                            st.error(f"⚠️ **ATTENTION : Arnaque probable sur le tarif de référence !** \n"
-                                                     f"La remise de **{remise_ref}** est basée sur un prix brut gonflé.  \n"
-                                                     f"Prix payé ce jour-là : **{p_ref_remise:.2f}€** | Meilleur prix historique : **{p_record_abs:.2f}€**")
-                                    # --------------------------------------------
+                                        if m['Best_Price_Net'] > 0 and m['Price_At_Best_Remise'] > (m['Best_Price_Net'] * 1.10):
+                                            st.error(f"⚠️ **ATTENTION : Arnaque du fournisseur sur le prix de référence !** \n"
+                                                     f"Le fournisseur affiche une remise de **{m['Best_Remise']}%**, mais gonfle son prix de vente.  \n"
+                                                     f"Prix à cette remise : **{m['Price_At_Best_Remise']:.2f}€** | Vrai prix record : **{m['Best_Price_Net']:.2f}€**")
 
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
                                     
@@ -847,6 +833,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
