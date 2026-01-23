@@ -7,8 +7,12 @@ import re
 import json
 import time
 from io import BytesIO
-import os
-from datetime import datetime
+# ==============================================================================
+# 1. CONFIGURATION & REGISTRE
+# ==============================================================================
+URL_SUPABASE = st.secrets["SUPABASE_URL"]
+CLE_ANON = st.secrets["SUPABASE_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 REGISTRE_FILE = "registre_accords.json"
 
@@ -21,7 +25,7 @@ def charger_registre():
 def sauvegarder_accord(article, type_accord, valeur):
     registre = charger_registre()
     registre[article] = {
-        "type": type_accord, # "CONTRAT", "PROMO" ou "ERREUR"
+        "type": type_accord, 
         "valeur": valeur,
         "date": datetime.now().strftime("%Y-%m-%d")
     }
@@ -845,6 +849,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
