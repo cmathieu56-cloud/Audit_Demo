@@ -319,7 +319,20 @@ if session:
                     except: pass
                 
                 remise = str(l.get('remise', '-'))
-                # --- FIN DU BLOC A INSERER ---
+                
+                # --- CALCUL DE LA REMISE RÉELLE (Gestion des cascades 60+25) ---
+                remise_val = 0.0
+                remise_clean = remise.replace('%', '').replace(' ', '').replace(',', '.')
+                if '+' in remise_clean:
+                    coef = 1.0
+                    for p in remise_clean.split('+'):
+                        try: coef *= (1 - float(p)/100)
+                        except: pass
+                    remise_val = (1 - coef) * 100
+                else:
+                    try: remise_val = float(remise_clean)
+                    except: remise_val = 0.0
+                # ---------------------------------------------------------------
                 num_bl = l.get('num_bl_ligne', '-')
                 
                 qte_finale = qte_ia
@@ -780,5 +793,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
