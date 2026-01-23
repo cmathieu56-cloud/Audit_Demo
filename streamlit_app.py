@@ -187,9 +187,10 @@ def traiter_un_fichier(nom_fichier, user_id):
              * quantite : Le nombre d'unités. 🚨 RÈGLE D'OR : Vérifie que (Montant / Prix Net) = Quantité.
              * article : La référence technique.
              * designation : Le nom du produit.
-             * prix_brut : Le prix catalogue (garde le slash /100 si présent).
-             * remise : Le pourcentage de remise.
-             * prix_net : Le prix payé (garde le slash /100 si présent).
+             * prix_brut_unitaire : Le prix catalogue affiché AVANT toute division.
+             * base_facturation : Si le prix est pour 100 ou 1000 unités (ex: câbles), note le nombre (100, 1000). Sinon mets 1.
+             * remise : Le pourcentage de remise (ex: "60+10" ou "70").
+             * prix_net_unitaire : Le prix payé unitaire affiché AVANT toute division.
              * montant : Le total HT de la ligne.
              * num_bl_ligne : Le numéro de BL.
 
@@ -211,9 +212,10 @@ def traiter_un_fichier(nom_fichier, user_id):
                     "quantite": 1,
                     "article": "...",
                     "designation": "...",
-                    "prix_brut": "...",
+                    "prix_brut_unitaire": 0.0,
+                    "base_facturation": 1,
                     "remise": "...",
-                    "prix_net": "...",
+                    "prix_net_unitaire": 0.0,
                     "montant": 0.0,
                     "num_bl_ligne": "..."
                 }
@@ -838,6 +840,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
