@@ -99,37 +99,7 @@ def detecter_famille(label, ref=""):
         if any(x in label_up for x in ["COLASTIC", "MASTIC", "CHIMIQUE", "COLLE"]): return "CONSOMMABLE"
         return "AUTRE_PRODUIT"
     
-    
     return "AUTRE_PRODUIT"
-
-
-def calculer_taux_effectif(brut, net, remise_texte):
-    """
-    Calcule le taux de remise réel, même si la facture n'affiche qu'un prix net.
-    """
-    # 1. Priorité au calcul mathématique de la remise texte (ex: 60+10)
-    if remise_texte and isinstance(remise_texte, str) and remise_texte not in ["-", "?", "0", "0.0"]:
-        try:
-            parties = remise_texte.replace('%', '').split('+')
-            coefficient = 1.0
-            for p in parties:
-                val = float(p.strip().replace(',', '.'))
-                coefficient *= (1 - (val / 100))
-            return 1 - coefficient
-        except:
-            pass
-    
-    # 2. Fallback : Calcul par différence entre Brut (tarif) et Net (payé)
-    try:
-        # Nettoyage des valeurs
-        b = float(str(brut).replace(' ', '').replace(',', '.').strip())
-        n = float(str(net).replace(' ', '').replace(',', '.').strip())
-        if b > 0 and b >= n:
-            return (b - n) / b
-    except:
-        pass
-        
-    return 0.0
 
 
 def extraire_json_robuste(texte):
@@ -495,21 +465,14 @@ if session:
                 st.divider()
                 # --- FIN AJOUT ---
 
-            df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])].copy()
+            df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
             if not df_produits.empty:
-                # On calcule le taux effectif pour chaque ligne de produit
-                df_produits['Taux_Reel'] = df_produits.apply(
-                    lambda x: calculer_taux_effectif(x['Prix Brut'], x['PU_Systeme'], x['Remise']), axis=1
-                )
-                
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
                 if not df_clean.empty:
-                    # ON TRIE PAR TAUX DÉCROISSANT (La meilleure remise en haut)
-                    best_rows = df_clean.sort_values('Taux_Reel', ascending=False).drop_duplicates('Article', keep='first')
-                    
-                    # On stocke le Taux_Reel dans la mémoire
-                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut', 'Taux_Reel']].to_dict('index')
+                    best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
+                    # 1. MÉMOIRE (Déjà présente dans ton code, je garde)
+                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
 
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
@@ -557,51 +520,36 @@ if session:
                         best_fac = ref_info['Facture']
                         best_date = ref_info['Date']
                         
-                        # --- NOUVELLE LOGIQUE TAUX ---
-                       # --- NOUVELLE LOGIQUE TAUX ---
-                        best_taux = ref_info.get('Taux_Reel', 0.0)
+                        # 3. LOGIQUE RÉCUPÉRATION (Avec Sécurité Anti-Crash)
+                        best_remise = str(ref_info.get('Remise', '-')) 
                         
-                        # Calcul du Brut actuel (sécurisé)
+                        try:
+                            # On essaie de convertir, si ça rate on met 0.0
+                            val_temp = ref_info.get('Prix Brut', 0.0)
+                            best_brut = float(str(val_temp).replace(',', '.').strip())
+                        except:
+                            best_brut = 0.0
+                            
                         curr_brut = 0.0
                         if row['Prix Brut']:
                             try:
-                                curr_brut = float(str(row['Prix Brut']).replace(',', '.').replace(' ', '').strip())
+                                curr_brut = float(str(row['Prix Brut']).replace(',', '.').strip())
                             except: pass
 
-                        # --- FIX : RECONSTITUTION DU BRUT MANQUANT ---
-                        # Si l'IA a raté le Prix Brut mais qu'on a une Remise explicite (ex: "60+5"),
-                        # on reconstruit le Brut théorique pour vérifier si la remise est respectée.
-                        if curr_brut == 0 and row['PU_Systeme'] > 0:
-                             taux_fac = calculer_taux_effectif(0, 0, row['Remise'])
-                             if taux_fac > 0:
-                                 # On déduit le brut théorique mathématiquement
-                                 curr_brut = row['PU_Systeme'] / (1 - taux_fac)
-                        # ---------------------------------------------
-
-                        # La cible est recalculée sur le Brut du jour * Meilleur Taux
-                        if curr_brut > 0:
-                            cible = curr_brut * (1 - best_taux)
-                        else:
-                            cible = best_price # Fallback si pas de brut
-                            
-                        if row['PU_Systeme'] > cible + 0.005:
-                            ecart_u = row['PU_Systeme'] - cible
+                        if row['PU_Systeme'] > best_price + 0.005:
+                            ecart_u = row['PU_Systeme'] - best_price
                             perte = ecart_u * row['Quantité']
-                            motif = "Hausse Prix (Remise non tenue)"
+                            cible = best_price
+                            motif = "Hausse Prix"
                             source_cible = f"{best_date}"
                             
-                            # On affiche la meilleure remise historique (texte ou calculée)
-                            remise_cible_str = ref_info.get('Remise', f"{best_taux*100:.1f}%")
-                            if remise_cible_str in ["-", "?", "0"]:
-                                remise_cible_str = f"{best_taux*100:.1f}%"
-
-                            details = [f"(Meilleure remise: {remise_cible_str} au {best_date})"]
-                            # ALERTE HAUSSE BRUT (Toujours utile pour info)
-                            try:
-                                best_brut = float(str(ref_info.get('Prix Brut', 0)).replace(',', '.').strip())
-                                if best_brut > 0 and curr_brut > best_brut + 0.01:
-                                    details.append(f"Hausse Tarif Brut ({best_brut:.2f} -> {curr_brut:.2f})")
-                            except: pass
+                            # On stocke la remise texte
+                            remise_cible_str = best_remise
+                            
+                            details = [f"(Facture {best_fac})"]
+                            # ALERTE HAUSSE BRUT
+                            if best_brut > 0 and curr_brut > best_brut + 0.01:
+                                details.append(f"Hausse Tarif Brut ({best_brut:.2f} -> {curr_brut:.2f})")
                             
                             detail_tech = " ".join(details)
 
@@ -832,9 +780,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
-
 
 
