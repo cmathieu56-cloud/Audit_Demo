@@ -597,7 +597,7 @@ if session:
                         "PU_Systeme": row['PU_Systeme'],
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
-                        "Remise": row['Remise'],
+                        "Remise": remise_affichage,
                         "Remise Cible": remise_cible_str, # 4. AFFICHAGE (Corrigé)
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
@@ -804,6 +804,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
