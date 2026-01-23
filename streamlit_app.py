@@ -527,47 +527,39 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Hausse de prix) ---
+                # --- LOGIQUE 2 : PRODUITS (Hybride Remise / Prix) ---
                 else:
                     article_courant = row['Article']
                     if article_courant in ref_map and article_courant != 'SANS_REF':
                         ref_info = ref_map[article_courant]
-                        best_price = ref_info['PU_Systeme']
-                        best_fac = ref_info['Facture']
+                        
+                        # Données historiques
+                        best_remise_v = ref_info.get('Remise_Val', 0.0)
+                        best_price_hist = ref_info['PU_Systeme']
                         best_date = ref_info['Date']
                         
-                        # 3. LOGIQUE RÉCUPÉRATION (Avec Sécurité Anti-Crash)
-                        best_remise = str(ref_info.get('Remise', '-')) 
-                        
-                        try:
-                            # On essaie de convertir, si ça rate on met 0.0
-                            val_temp = ref_info.get('Prix Brut', 0.0)
-                            best_brut = float(str(val_temp).replace(',', '.').strip())
-                        except:
-                            best_brut = 0.0
-                            
-                        curr_brut = 0.0
-                        if row['Prix Brut']:
-                            try:
-                                curr_brut = float(str(row['Prix Brut']).replace(',', '.').strip())
-                            except: pass
+                        # Données actuelles
+                        curr_remise_v = row.get('Remise_Val', 0.0)
+                        curr_brut = clean_float(row['Prix Brut'])
 
-                        if row['PU_Systeme'] > best_price + 0.005:
-                            ecart_u = row['PU_Systeme'] - best_price
-                            perte = ecart_u * row['Quantité']
-                            cible = best_price
-                            motif = "Hausse Prix"
-                            source_cible = f"{best_date}"
-                            
-                            # On stocke la remise texte
-                            remise_cible_str = best_remise
-                            
-                            details = [f"(Facture {best_fac})"]
-                            # ALERTE HAUSSE BRUT
-                            if best_brut > 0 and curr_brut > best_brut + 0.01:
-                                details.append(f"Hausse Tarif Brut ({best_brut:.2f} -> {curr_brut:.2f})")
-                            
-                            detail_tech = " ".join(details)
+                        # CAS A : On a une remise (Logique "Contrat")
+                        if curr_remise_v > 0 or best_remise_v > 0:
+                            if curr_remise_v < (best_remise_v - 0.1): # Baisse de plus de 0.1%
+                                motif = "Baisse de Remise"
+                                source_cible = f"{best_date}"
+                                remise_cible_str = ref_info['Remise']
+                                cible = curr_brut * (1 - best_remise_v / 100)
+                                perte = (row['PU_Systeme'] - cible) * row['Quantité']
+                                detail_tech = f"(Contrat: {remise_cible_str} sur Fac {ref_info['Facture']})"
+
+                        # CAS B : Pas de remise (Logique "Prix Marché")
+                        else:
+                            if row['PU_Systeme'] > best_price_hist + 0.005:
+                                perte = (row['PU_Systeme'] - best_price_hist) * row['Quantité']
+                                cible = best_price_hist
+                                motif = "Hausse Prix Net"
+                                source_cible = f"{best_date}"
+                                detail_tech = f"(Ancien prix sur Fac {ref_info['Facture']})"
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -796,6 +788,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
