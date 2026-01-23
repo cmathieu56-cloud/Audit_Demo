@@ -718,14 +718,16 @@ if session:
                         df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
                         
                         for article, group in df_litiges_fourn.groupby('Ref'):
-                            prix_ref = group['Cible (U)'].iloc[0]
-                            date_ref = group['Source Cible'].iloc[0]
-                            remise_ref = group['Remise Cible'].iloc[0]
-                            nom_art = group['Désignation'].iloc[0]
+                                    # On ne récupère plus le prix_ref pour l'affichage
+                                    date_ref = group['Source Cible'].iloc[0]
+                                    remise_ref = group['Remise Cible'].iloc[0]
+                                    nom_art = group['Désignation'].iloc[0]
         
-                            st.markdown(f"**📦 {article}** - {nom_art} | Cible: **{prix_ref:.4f} €** (Remise {remise_ref}) au {date_ref}")
-                            
-                            sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
+                                    # NOUVEAU TITRE : Focus 100% sur la Remise
+                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}** (Vu le {date_ref})")
+                                    
+                                    # Tableau : On garde Payé (U) pour vérifier la facture, mais c'est tout.
+                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
                             html_detail = sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})\
                             .set_properties(**{
                                 'text-align': 'center', 'border': '1px solid black', 'color': 'black'
@@ -805,6 +807,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
