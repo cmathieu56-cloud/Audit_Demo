@@ -343,7 +343,7 @@ if session:
                 raw_remise = str(l.get('remise', '0'))
                 val_remise = calculer_remise_combine(raw_remise)
                 remise = f"{val_remise:g}%" if val_remise > 0 else "-"
-                
+                num_bl = l.get('num_bl_ligne', '-')
                 qte_finale = qte_ia
                 if montant > 0 and p_net > 0:
                     ratio = montant / p_net
@@ -802,6 +802,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
