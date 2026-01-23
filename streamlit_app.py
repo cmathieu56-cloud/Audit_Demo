@@ -6,14 +6,10 @@ import pandas as pd
 import re
 import json
 import time
-import os  # <--- INDISPENSABLE POUR LE REGISTRE
-from datetime import datetime # <--- INDISPENSABLE POUR LA DATE
+import os
+from datetime import datetime
 from io import BytesIO
 
-
-URL_SUPABASE = st.secrets["SUPABASE_URL"]
-CLE_ANON = st.secrets["SUPABASE_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 # ==============================================================================
 # 1. CONFIGURATION & REGISTRE
 # ==============================================================================
@@ -21,31 +17,12 @@ URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
-# --- LES LIGNES MANQUANTES SONT ICI ---
 try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
     st.error(f"Erreur connexion : {e}")
-# ---------------------------------------
 
-REGISTRE_FILE = "registre_accords.json"
-
-def charger_registre():
-    if os.path.exists(REGISTRE_FILE):
-        with open(REGISTRE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def sauvegarder_accord(article, type_accord, valeur):
-    registre = charger_registre()
-    registre[article] = {
-        "type": type_accord, 
-        "valeur": valeur,
-        "date": datetime.now().strftime("%Y-%m-%d")
-    }
-    with open(REGISTRE_FILE, "w", encoding="utf-8") as f:
-        json.dump(registre, f, indent=4)
 REGISTRE_FILE = "registre_accords.json"
 
 def charger_registre():
@@ -881,6 +858,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
