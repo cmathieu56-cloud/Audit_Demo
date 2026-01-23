@@ -527,56 +527,49 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Méthode Bibi + Affichage % dans le tableau) ---
-                else:
-                    article_courant = row['Article']
-                    if article_courant in ref_map and article_courant != 'SANS_REF':
-                        ref_info = ref_map[article_courant]
-                        
-                        # Infos historiques
-                        best_remise_v = ref_info.get('Remise_Val', 0.0)
-                        best_price_hist = ref_info['PU_Systeme']
-                        best_date = ref_info['Date']
-                        
-                        # Infos actuelles
-                        curr_remise_v = row.get('Remise_Val', 0.0)
-                        
-                        # CAS SPÉCIAL : "PROMO NET" (Remise à 0 mais bon prix)
-                        if curr_remise_v < 1 and row['PU_Systeme'] <= best_price_hist:
-                            perte = 0 
-                            
-                        # CAS CLASSIQUE : Analyse des Remises
-                        elif curr_remise_v > 0 or best_remise_v > 0:
-                            if best_remise_v > curr_remise_v + 0.1:
-                                motif = "Baisse de Remise"
-                                source_cible = f"{best_date}"
-                                
-                                # C'EST ICI QUE CA SE JOUE : On force le % dans la colonne du tableau
-                                remise_cible_str = f"{best_remise_v:g}%"
-                                
-                                # Si Remise 0 (et prix plus cher que l'histoire), on compare au Prix Net Historique
-                                if curr_remise_v < 1:
-                                     cible = best_price_hist
-                                     detail_tech = f"(Promo absente: Payé {row['PU_Systeme']} vs Hist {best_price_hist})"
-                                # Sinon, calcul savant (Bibi Method)
-                                else:
-                                    coeff_actuel = 1 - (curr_remise_v / 100)
-                                    coeff_cible = 1 - (best_remise_v / 100)
-                                    cible = (row['PU_Systeme'] / coeff_actuel) * coeff_cible
-                                    
-                                    # On affiche aussi le % actuel pour comparer
-                                    detail_tech = f"(Contrat: {remise_cible_str} vs {curr_remise_v:g}%)"
-                                
-                                perte = (row['PU_Systeme'] - cible) * row['Quantité']
+                # --- LOGIQUE 2 : PRODUITS (Méthode Bibi + Affichage % calculé) ---
+else:
+    article_courant = row['Article']
+    if article_courant in ref_map and article_courant != 'SANS_REF':
+        ref_info = ref_map[article_courant]
+        
+        # Infos historiques
+        best_remise_v = ref_info.get('Remise_Val', 0.0)
+        best_price_hist = ref_info['PU_Systeme']
+        best_date = ref_info['Date']
+        
+        # Infos actuelles
+        curr_remise_v = row.get('Remise_Val', 0.0)
+        
+        # --- MODIFICATION ICI : On prépare l'affichage de la remise ---
+        # Si c'est du type "60+10", on affiche le résultat calculé "64%"
+        remise_affichage = row['Remise'] 
+        if '+' in str(remise_affichage):
+            remise_affichage = f"{curr_remise_v:g}%"
+        # -------------------------------------------------------------
 
-                        # CAS B : Pas de remise
-                        else:
-                            if row['PU_Systeme'] > best_price_hist + 0.005:
-                                perte = (row['PU_Systeme'] - best_price_hist) * row['Quantité']
-                                cible = best_price_hist
-                                motif = "Hausse Prix Net"
-                                source_cible = f"{best_date}"
-                                detail_tech = f"(Ancien prix sur Fac {ref_info['Facture']})"
+        # CAS SPÉCIAL : "PROMO NET"
+        if curr_remise_v < 1 and row['PU_Systeme'] <= best_price_hist:
+            perte = 0 
+            
+        # CAS CLASSIQUE : Analyse des Remises
+        elif curr_remise_v > 0 or best_remise_v > 0:
+            if best_remise_v > curr_remise_v + 0.1:
+                motif = "Baisse de Remise"
+                source_cible = f"{best_date}"
+                remise_cible_str = f"{best_remise_v:g}%"
+                
+                if curr_remise_v < 1:
+                     cible = best_price_hist
+                     detail_tech = f"(Promo absente: Payé {row['PU_Systeme']} vs Hist {best_price_hist})"
+                else:
+                    coeff_actuel = 1 - (curr_remise_v / 100)
+                    coeff_cible = 1 - (best_remise_v / 100)
+                    cible = (row['PU_Systeme'] / coeff_actuel) * coeff_cible
+                    detail_tech = f"(Contrat: {remise_cible_str} vs {curr_remise_v:g}%)"
+                
+                perte = (row['PU_Systeme'] - cible) * row['Quantité']
+                
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
@@ -804,6 +797,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
