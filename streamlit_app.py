@@ -324,23 +324,31 @@ if session:
                 
                 montant = clean_float(l.get('montant', 0))
                 
-                # Calcul du Net (ex: 21.23 / 100)
+                # --- NOUVELLE LOGIQUE UNIVERSELLE DE CALCUL ---
+                base_fac = float(l.get('base_facturation', 1))
+                if base_fac <= 0: base_fac = 1
+
+                # Calcul du Net Réel
+                p_net_lu = clean_float(l.get('prix_net_unitaire', l.get('prix_net', 0)))
+                p_net = p_net_lu / base_fac
+                
+                # Sécurité Rétro-compatibilité (si l'IA a mis le slash dans l'ancien champ)
                 raw_net = str(l.get('prix_net', '0'))
-                p_net = clean_float(raw_net)
-                if '/' in raw_net:
-                    try:
-                        div = float(raw_net.split('/')[-1].replace(' ', ''))
-                        if div > 0: p_net = p_net / div
+                if '/' in raw_net and base_fac == 1:
+                    try: p_net = clean_float(raw_net.split('/')[0]) / float(raw_net.split('/')[1])
                     except: pass
 
-                # Calcul du Brut (ex: 141.50 / 100)
-                raw_brut = str(l.get('prix_brut', '0'))
-                p_brut = clean_float(raw_brut)
-                if '/' in raw_brut:
-                    try:
-                        div_b = float(raw_brut.split('/')[-1].replace(' ', ''))
-                        if div_b > 0: p_brut = p_brut / div_b
+                # Calcul du Brut Réel
+                p_brut_lu = clean_float(l.get('prix_brut_unitaire', l.get('prix_brut', 0)))
+                p_brut = p_brut_lu / base_fac
+
+                if '/' in str(l.get('prix_brut', '')) and base_fac == 1:
+                    try: p_brut = clean_float(str(l.get('prix_brut')).split('/')[0]) / float(str(l.get('prix_brut')).split('/')[1])
                     except: pass
+                
+                # On stocke le brut "propre" pour l'affichage
+                raw_brut = f"{p_brut:.4f}"
+                # ----------------------------------------------
                 
                 raw_remise = str(l.get('remise', '0'))
                 val_remise = calculer_remise_combine(raw_remise)
@@ -840,6 +848,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
