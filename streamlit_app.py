@@ -558,6 +558,7 @@ if session:
                         best_date = ref_info['Date']
                         
                         # --- NOUVELLE LOGIQUE TAUX ---
+                       # --- NOUVELLE LOGIQUE TAUX ---
                         best_taux = ref_info.get('Taux_Reel', 0.0)
                         
                         # Calcul du Brut actuel (sécurisé)
@@ -566,6 +567,16 @@ if session:
                             try:
                                 curr_brut = float(str(row['Prix Brut']).replace(',', '.').replace(' ', '').strip())
                             except: pass
+
+                        # --- FIX : RECONSTITUTION DU BRUT MANQUANT ---
+                        # Si l'IA a raté le Prix Brut mais qu'on a une Remise explicite (ex: "60+5"),
+                        # on reconstruit le Brut théorique pour vérifier si la remise est respectée.
+                        if curr_brut == 0 and row['PU_Systeme'] > 0:
+                             taux_fac = calculer_taux_effectif(0, 0, row['Remise'])
+                             if taux_fac > 0:
+                                 # On déduit le brut théorique mathématiquement
+                                 curr_brut = row['PU_Systeme'] / (1 - taux_fac)
+                        # ---------------------------------------------
 
                         # La cible est recalculée sur le Brut du jour * Meilleur Taux
                         if curr_brut > 0:
@@ -821,6 +832,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
