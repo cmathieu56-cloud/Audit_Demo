@@ -506,9 +506,9 @@ if session:
                 motif = ""
                 cible = 0.0 
                 source_cible = "-"
-                detail_tech = ""
                 # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
                 remise_cible_str = "-" 
+                remise_affichage = row['Remise']
                 
                 # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
                 if row['Famille'] == "FRAIS GESTION":
@@ -797,6 +797,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
