@@ -7,36 +7,26 @@ import re
 import json
 import time
 from io import BytesIO
+import os
+from datetime import datetime
 
-# ==============================================================================
-# 1. CONFIGURATION
-# ==============================================================================
-URL_SUPABASE = st.secrets["SUPABASE_URL"]
-CLE_ANON = st.secrets["SUPABASE_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+REGISTRE_FILE = "registre_accords.json"
 
-st.set_page_config(page_title="Audit V21 - Logique Universelle", page_icon="🏗️", layout="wide")
+def charger_registre():
+    if os.path.exists(REGISTRE_FILE):
+        with open(REGISTRE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-st.markdown("""
-<style>
-    div[data-testid="stDataFrame"] { font-size: 110% !important; }
-    div[data-testid="stMetricValue"] { font-size: 2.5rem !important; font-weight: bold; }
-    .stAlert { font-weight: bold; border: 2px solid #ff4b4b; }
-    div.stButton > button:first-child { font-weight: bold; }
-    div.stButton.delete-btn > button:first-child { 
-        background-color: #ff4b4b; 
-        color: white; 
-        border-color: #ff4b4b;
+def sauvegarder_accord(article, type_accord, valeur):
+    registre = charger_registre()
+    registre[article] = {
+        "type": type_accord, # "CONTRAT", "PROMO" ou "ERREUR"
+        "valeur": valeur,
+        "date": datetime.now().strftime("%Y-%m-%d")
     }
-</style>
-""", unsafe_allow_html=True)
-
-try:
-    supabase = create_client(URL_SUPABASE, CLE_ANON)
-    genai.configure(api_key=GEMINI_API_KEY)
-except Exception as e:
-    st.error(f"Erreur connexion : {e}")
-
+    with open(REGISTRE_FILE, "w", encoding="utf-8") as f:
+        json.dump(registre, f, indent=4)
 # ==============================================================================
 # 2. LOGIQUE MÉTIER
 # ==============================================================================
@@ -499,24 +489,38 @@ if session:
 
             df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
+            registre = charger_registre()
+            
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF'].copy()
                 df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
                 
                 for art, group in df_clean.groupby('Article'):
-                    # Records
-                    valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
-                    best_r_row = valid_remises.iloc[0] if not valid_remises.empty else group.iloc[0]
+                    # On vérifie si Marcel a déjà pris une décision sur cet article
+                    accord = registre.get(art)
                     
+                    # Logique de sélection des records
+                    valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
                     valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True)
-                    best_p_row = valid_prices.iloc[0] if not valid_prices.empty else group.iloc[0]
+                    
+                    # Gestion du cas PROMO : on ignore le record n°1
+                    idx_r, idx_p = 0, 0
+                    if accord and accord['type'] == "PROMO":
+                        if len(valid_remises) > 1: idx_r = 1
+                        if len(valid_prices) > 1: idx_p = 1
+                    
+                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0]
+                    best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
+
+                    # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
+                    remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
 
                     ref_map[art] = {
-                        'Best_Remise': best_r_row['Remise_Val'],
+                        'Best_Remise': remise_finale,
                         'Best_Brut_Associe': clean_float(best_r_row['Prix Brut']),
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
-                        'Date_Remise': best_r_row['Date'],
+                        'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
                         'Date_Price': best_p_row['Date']
                     }
             
@@ -740,13 +744,21 @@ if session:
                                     # NOUVEAU TITRE : Focus 100% sur la Remise
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}** (Vu le {date_ref})")
                                     
-                                    # --- ALERTE ARNAQUE FOURNISSEUR ---
-                                    if article in ref_map:
-                                        m = ref_map[article]
-                                        if m['Best_Price_Net'] > 0 and m['Price_At_Best_Remise'] > (m['Best_Price_Net'] * 1.10):
-                                            st.error(f"⚠️ **ATTENTION : Arnaque du fournisseur sur le prix de référence !** \n"
-                                                     f"Le fournisseur affiche une remise de **{m['Best_Remise']}%**, mais gonfle son prix de vente.  \n"
-                                                     f"Prix à cette remise : **{m['Price_At_Best_Remise']:.2f}€** | Vrai prix record : **{m['Best_Price_Net']:.2f}€**")
+                                    # --- INTERFACE D'ARBITRAGE MARCEL ---
+                                    c_bt1, c_bt2, c_bt3 = st.columns(3)
+                                    with c_bt1:
+                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{article}"):
+                                            sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
+                                            st.rerun()
+                                    with c_bt2:
+                                        if st.button("🎁 Marquer comme Promo", key=f"p_{article}"):
+                                            sauvegarder_accord(article, "PROMO", 0)
+                                            st.rerun()
+                                    with c_bt3:
+                                        if st.button("❌ Ignorer Erreur", key=f"e_{article}"):
+                                            sauvegarder_accord(article, "ERREUR", 0)
+                                            st.rerun()
+                                    # ------------------------------------
 
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
                                     
@@ -833,6 +845,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
