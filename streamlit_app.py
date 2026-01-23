@@ -54,6 +54,28 @@ def clean_float(val):
     except:
         return 0.0
 
+def calculer_remise_combine(val_str):
+    """Convertit '60+10' en 64 (float) et nettoie le format"""
+    if not isinstance(val_str, str): return 0.0
+    # Nettoyage de base
+    val_str = val_str.replace('%', '').replace(' ', '').replace('EUR', '').replace(',', '.')
+    
+    if not val_str: return 0.0
+    
+    try:
+        # Gestion des remises cumulées (ex: 60+10)
+        parts = val_str.split('+')
+        reste_a_payer = 1.0
+        
+        for p in parts:
+            if p.strip():
+                reste_a_payer *= (1 - float(p.strip())/100)
+                
+        remise_totale = (1 - reste_a_payer) * 100
+        return round(remise_totale, 2)
+    except:
+        return 0.0
+
 def detecter_famille(label, ref=""):
     if not isinstance(label, str): label = ""
     if not isinstance(ref, str): ref = ""
@@ -318,9 +340,9 @@ if session:
                         if div_b > 0: p_brut = p_brut / div_b
                     except: pass
                 
-                remise = str(l.get('remise', '-'))
-                # --- FIN DU BLOC A INSERER ---
-                num_bl = l.get('num_bl_ligne', '-')
+                raw_remise = str(l.get('remise', '0'))
+                val_remise = calculer_remise_combine(raw_remise)
+                remise = f"{val_remise:g}%" if val_remise > 0 else "-"
                 
                 qte_finale = qte_ia
                 if montant > 0 and p_net > 0:
@@ -780,5 +802,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
