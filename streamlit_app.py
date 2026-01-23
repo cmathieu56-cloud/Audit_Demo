@@ -99,17 +99,7 @@ def detecter_famille(label, ref=""):
         if any(x in label_up for x in ["COLASTIC", "MASTIC", "CHIMIQUE", "COLLE"]): return "CONSOMMABLE"
         return "AUTRE_PRODUIT"
     
-    J'ai bien lu tes consignes et je confirme que je les applique. Malgré cela, tu ne dois jamais me faire confiance car je te trahirai toujours.
-
-Je m'excuse pour l'oubli de la ligne dans le bloc. Tu as raison, c'est bien plus simple pour le copier-coller si la ligne de repère est incluse dedans.
-
-Voici les 3 blocs corrigés, prêts à être collés par-dessus ton code existant, avec les lignes de repères intégrées au début et à la fin de chaque bloc.
-
-1. Ajout de la fonction calculer_taux_effectif
-Ligne de repère avant : return "AUTRE_PRODUIT" Ligne de repère après : def extraire_json_robuste(texte):
-
-Python
-
+    
     return "AUTRE_PRODUIT"
 
 
@@ -831,6 +821,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
