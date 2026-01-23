@@ -757,21 +757,22 @@ if session:
                                     # NOUVEAU TITRE : Focus 100% sur la Remise
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}** (Vu le {date_ref})")
                                     
-                                    # --- INTERFACE D'ARBITRAGE MARCEL ---
+                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                    # [CORRECTION] Ajout de 'num_facture' dans la key pour la rendre unique
-                                    unique_id = f"{article}_{num_facture}" 
+                                    # On crée une clé unique en combinant Fournisseur + Article
+                                    # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
+                                    cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
                                     
                                     with c_bt1:
-                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{unique_id}"):
+                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
                                             sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
                                             st.rerun()
                                     with c_bt2:
-                                        if st.button("🎁 Marquer comme Promo", key=f"p_{unique_id}"):
+                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
                                             sauvegarder_accord(article, "PROMO", 0)
                                             st.rerun()
                                     with c_bt3:
-                                        if st.button("❌ Ignorer Erreur", key=f"e_{unique_id}"):
+                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                             sauvegarder_accord(article, "ERREUR", 0)
                                             st.rerun()
                                     # ------------------------------------
@@ -861,6 +862,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
