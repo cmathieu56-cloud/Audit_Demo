@@ -759,16 +759,19 @@ if session:
                                     
                                     # --- INTERFACE D'ARBITRAGE MARCEL ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
+                                    # [CORRECTION] Ajout de 'num_facture' dans la key pour la rendre unique
+                                    unique_id = f"{article}_{num_facture}" 
+                                    
                                     with c_bt1:
-                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{article}"):
+                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{unique_id}"):
                                             sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
                                             st.rerun()
                                     with c_bt2:
-                                        if st.button("🎁 Marquer comme Promo", key=f"p_{article}"):
+                                        if st.button("🎁 Marquer comme Promo", key=f"p_{unique_id}"):
                                             sauvegarder_accord(article, "PROMO", 0)
                                             st.rerun()
                                     with c_bt3:
-                                        if st.button("❌ Ignorer Erreur", key=f"e_{article}"):
+                                        if st.button("❌ Ignorer Erreur", key=f"e_{unique_id}"):
                                             sauvegarder_accord(article, "ERREUR", 0)
                                             st.rerun()
                                     # ------------------------------------
@@ -858,6 +861,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
