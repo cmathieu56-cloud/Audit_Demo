@@ -319,20 +319,7 @@ if session:
                     except: pass
                 
                 remise = str(l.get('remise', '-'))
-                
-                # --- CALCUL DE LA REMISE RÉELLE (Gestion des cascades 60+25) ---
-                remise_val = 0.0
-                remise_clean = remise.replace('%', '').replace(' ', '').replace(',', '.')
-                if '+' in remise_clean:
-                    coef = 1.0
-                    for p in remise_clean.split('+'):
-                        try: coef *= (1 - float(p)/100)
-                        except: pass
-                    remise_val = (1 - coef) * 100
-                else:
-                    try: remise_val = float(remise_clean)
-                    except: remise_val = 0.0
-                # ---------------------------------------------------------------
+                # --- FIN DU BLOC A INSERER ---
                 num_bl = l.get('num_bl_ligne', '-')
                 
                 qte_finale = qte_ia
@@ -369,9 +356,8 @@ if session:
                     "Quantité": qte_finale,
                     "Article": article,
                     "Désignation": l.get('designation', ''),
-                    "Prix Brut": p_brut,
+                    "Prix Brut": raw_brut,
                     "Remise": remise,
-                    "Remise_Val": remise_val,
                     "Prix Net": p_net, 
                     "Montant": montant,
                     "PU_Systeme": pu_systeme,
@@ -484,11 +470,9 @@ if session:
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
                 if not df_clean.empty:
-                    # CHANGEMENT ICI : On trie par Remise_Val (la plus haute en premier)
-                    best_rows = df_clean.sort_values('Remise_Val', ascending=False).drop_duplicates('Article', keep='first')
-                    
-                    # On stocke Remise_Val dans la mémoire pour pouvoir comparer plus tard
-                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Remise_Val', 'Prix Brut']].to_dict('index')
+                    best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
+                    # 1. MÉMOIRE (Déjà présente dans ton code, je garde)
+                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
 
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
@@ -506,9 +490,9 @@ if session:
                 motif = ""
                 cible = 0.0 
                 source_cible = "-"
+                detail_tech = ""
                 # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
                 remise_cible_str = "-" 
-                remise_affichage = row['Remise']
                 
                 # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
                 if row['Famille'] == "FRAIS GESTION":
@@ -527,49 +511,48 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Méthode Bibi + Affichage % calculé) ---
-                    else:
-                        article_courant = row['Article']
-                        if article_courant in ref_map and article_courant != 'SANS_REF':
-                            ref_info = ref_map[article_courant]
-                            
-                            # Infos historiques
-                            best_remise_v = ref_info.get('Remise_Val', 0.0)
-                            best_price_hist = ref_info['PU_Systeme']
-                            best_date = ref_info['Date']
-                            
-                            # Infos actuelles
-                            curr_remise_v = row.get('Remise_Val', 0.0)
-                            
-                            # --- MODIFICATION ICI : On prépare l'affichage de la remise ---
-                            # Si c'est du type "60+10", on affiche le résultat calculé "64%"
-                            remise_affichage = row['Remise'] 
-                            if '+' in str(remise_affichage):
-                                remise_affichage = f"{curr_remise_v:g}%"
-                            # -------------------------------------------------------------
+                # --- LOGIQUE 2 : PRODUITS (Hausse de prix) ---
+                else:
+                    article_courant = row['Article']
+                    if article_courant in ref_map and article_courant != 'SANS_REF':
+                        ref_info = ref_map[article_courant]
+                        best_price = ref_info['PU_Systeme']
+                        best_fac = ref_info['Facture']
+                        best_date = ref_info['Date']
                         
-                            # CAS SPÉCIAL : "PROMO NET"
-                            if curr_remise_v < 1 and row['PU_Systeme'] <= best_price_hist:
-                                perte = 0 
-                                
-                            # CAS CLASSIQUE : Analyse des Remises
-                            elif curr_remise_v > 0 or best_remise_v > 0:
-                                if best_remise_v > curr_remise_v + 0.1:
-                                    motif = "Baisse de Remise"
-                                    source_cible = f"{best_date}"
-                                    remise_cible_str = f"{best_remise_v:g}%"
-                                    
-                                    if curr_remise_v < 1:
-                                         cible = best_price_hist
-                                         detail_tech = f"(Promo absente: Payé {row['PU_Systeme']} vs Hist {best_price_hist})"
-                                    else:
-                                        coeff_actuel = 1 - (curr_remise_v / 100)
-                                        coeff_cible = 1 - (best_remise_v / 100)
-                                        cible = (row['PU_Systeme'] / coeff_actuel) * coeff_cible
-                                        detail_tech = f"(Contrat: {remise_cible_str} vs {curr_remise_v:g}%)"
-                                    
-                                    perte = (row['PU_Systeme'] - cible) * row['Quantité']
-                                
+                        # 3. LOGIQUE RÉCUPÉRATION (Avec Sécurité Anti-Crash)
+                        best_remise = str(ref_info.get('Remise', '-')) 
+                        
+                        try:
+                            # On essaie de convertir, si ça rate on met 0.0
+                            val_temp = ref_info.get('Prix Brut', 0.0)
+                            best_brut = float(str(val_temp).replace(',', '.').strip())
+                        except:
+                            best_brut = 0.0
+                            
+                        curr_brut = 0.0
+                        if row['Prix Brut']:
+                            try:
+                                curr_brut = float(str(row['Prix Brut']).replace(',', '.').strip())
+                            except: pass
+
+                        if row['PU_Systeme'] > best_price + 0.005:
+                            ecart_u = row['PU_Systeme'] - best_price
+                            perte = ecart_u * row['Quantité']
+                            cible = best_price
+                            motif = "Hausse Prix"
+                            source_cible = f"{best_date}"
+                            
+                            # On stocke la remise texte
+                            remise_cible_str = best_remise
+                            
+                            details = [f"(Facture {best_fac})"]
+                            # ALERTE HAUSSE BRUT
+                            if best_brut > 0 and curr_brut > best_brut + 0.01:
+                                details.append(f"Hausse Tarif Brut ({best_brut:.2f} -> {curr_brut:.2f})")
+                            
+                            detail_tech = " ".join(details)
+
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
@@ -590,7 +573,7 @@ if session:
                         "PU_Systeme": row['PU_Systeme'],
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
-                        "Remise": remise_affichage,
+                        "Remise": row['Remise'],
                         "Remise Cible": remise_cible_str, # 4. AFFICHAGE (Corrigé)
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
@@ -717,7 +700,7 @@ if session:
         
                             st.markdown(f"**📦 {article}** - {nom_art} | Cible: **{prix_ref:.4f} €** (Remise {remise_ref}) au {date_ref}")
                             
-                            sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Remise Cible', 'Payé (U)', 'Perte']]
+                            sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
                             html_detail = sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})\
                             .set_properties(**{
                                 'text-align': 'center', 'border': '1px solid black', 'color': 'black'
@@ -797,24 +780,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
