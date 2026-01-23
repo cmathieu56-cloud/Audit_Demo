@@ -527,7 +527,7 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Méthode "Bibi" + Airbag Promo + Affichage %) ---
+                # --- LOGIQUE 2 : PRODUITS (Méthode Bibi + Affichage % dans le tableau) ---
                 else:
                     article_courant = row['Article']
                     if article_courant in ref_map and article_courant != 'SANS_REF':
@@ -542,9 +542,8 @@ if session:
                         curr_remise_v = row.get('Remise_Val', 0.0)
                         
                         # CAS SPÉCIAL : "PROMO NET" (Remise à 0 mais bon prix)
-                        # Si Remise < 1% ET que le prix payé est INFÉRIEUR OU ÉGAL au meilleur prix historique
                         if curr_remise_v < 1 and row['PU_Systeme'] <= best_price_hist:
-                            perte = 0 # On force à zéro, c'est une bonne affaire
+                            perte = 0 
                             
                         # CAS CLASSIQUE : Analyse des Remises
                         elif curr_remise_v > 0 or best_remise_v > 0:
@@ -552,7 +551,7 @@ if session:
                                 motif = "Baisse de Remise"
                                 source_cible = f"{best_date}"
                                 
-                                # ICI LA CORRECTION : On affiche le pourcentage calculé (ex: 64%)
+                                # C'EST ICI QUE CA SE JOUE : On force le % dans la colonne du tableau
                                 remise_cible_str = f"{best_remise_v:g}%"
                                 
                                 # Si Remise 0 (et prix plus cher que l'histoire), on compare au Prix Net Historique
@@ -564,6 +563,8 @@ if session:
                                     coeff_actuel = 1 - (curr_remise_v / 100)
                                     coeff_cible = 1 - (best_remise_v / 100)
                                     cible = (row['PU_Systeme'] / coeff_actuel) * coeff_cible
+                                    
+                                    # On affiche aussi le % actuel pour comparer
                                     detail_tech = f"(Contrat: {remise_cible_str} vs {curr_remise_v:g}%)"
                                 
                                 perte = (row['PU_Systeme'] - cible) * row['Quantité']
@@ -803,6 +804,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
