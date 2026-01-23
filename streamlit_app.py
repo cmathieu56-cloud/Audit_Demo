@@ -499,17 +499,31 @@ if session:
 
             df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
+            df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
+            ref_map = {}
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF'].copy()
                 
-                # On crée une colonne temporaire pour trier par valeur de remise (64 > 50)
-                df_clean['Remise_Sort'] = df_clean['Remise'].apply(lambda x: float(str(x).replace('%', '')) if str(x).replace('%', '').replace('.', '').isdigit() else 0.0)
+                # On prépare les colonnes pour le tri
+                df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
                 
-                # Tri décroissant : La meilleure remise en premier
-                best_rows = df_clean.sort_values('Remise_Sort', ascending=False).drop_duplicates('Article', keep='first')
+                # On crée deux dictionnaires : un pour la meilleure remise, un pour le meilleur prix
+                best_remises = df_clean.sort_values('Remise_Val', ascending=False).drop_duplicates('Article', keep='first')
+                best_prices = df_clean.sort_values('PU_Systeme', ascending=True).drop_duplicates('Article', keep='first')
                 
-                ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
-
+                # On fusionne dans ref_map
+                for art in df_clean['Article'].unique():
+                    r_row = best_remises[best_remises['Article'] == art].iloc[0]
+                    p_row = best_prices[best_prices['Article'] == art].iloc[0]
+                    ref_map[art] = {
+                        'Best_Remise': r_row['Remise_Val'],
+                        'Best_Brut_Associe': clean_float(r_row['Prix Brut']),
+                        'Best_Price_Net': p_row['PU_Systeme'],
+                        'Date_Remise': r_row['Date'],
+                        'Date_Price': p_row['Date'],
+                        'Fac_Remise': r_row['Facture']
+                    }
+            
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
 
@@ -549,50 +563,47 @@ if session:
 
                 # --- LOGIQUE 2 : PRODUITS (Basée sur le % de Remise) ---
                 else:
-                    article_courant = row['Article']
+                    art = row['Article']
                     remise_actuelle = clean_float(str(row['Remise']).replace('%', ''))
-
-                    if article_courant in ref_map and article_courant != 'SANS_REF':
-                        ref_info = ref_map[article_courant]
+                    pu_paye = row['PU_Systeme']
+                    brut_actuel = clean_float(row['Prix Brut'])
+                    
+                    if art in ref_map and art != 'SANS_REF':
+                        m = ref_map[art]
                         
-                        best_remise_val = clean_float(str(ref_info.get('Remise', '0')).replace('%', ''))
-                        best_fac = ref_info['Facture']
-                        best_date = ref_info['Date']
-                        
-                        # RECUPERATION DU VRAI PRIX BRUT (Historique)
-                        # On s'assure d'avoir le vrai tarif catalogue pour calculer la cible
-                        ref_brut_hist = clean_float(ref_info.get('Prix Brut', '0'))
-                        ref_net_hist = ref_info.get('PU_Systeme', 0.0)
-
-                        # Auto-correction du Brut Historique si l'IA s'était trompée au premier scan
-                        if best_remise_val > 10 and ref_brut_hist > 0:
-                            theorique_net = ref_brut_hist * (1 - best_remise_val/100)
-                            if abs(theorique_net - ref_net_hist) > (ref_net_hist * 0.1):
-                                if (1 - best_remise_val/100) > 0:
-                                    ref_brut_hist = ref_net_hist / (1 - best_remise_val/100)
-
-                        if ref_brut_hist > 0:
-                            # LA CIBLE REELLE : Ce que vous devriez payer normalement (Meilleure Remise sur Vrai Brut)
-                            cible_ideale = ref_brut_hist * (1 - (best_remise_val / 100))
-                            pu_paye = row['PU_Systeme']
+                        # CAS A : LE FOURNISSEUR EST STRUCTURE (Il y a du Brut et de la Remise)
+                        if brut_actuel > 0 and (remise_actuelle > 0 or m['Best_Remise'] > 0):
+                            best_r = m['Best_Remise']
+                            best_b = m['Best_Brut_Associe']
                             
-                            # CAS 1 : C'EST PLUS CHER (Magouille ou Chute de remise)
-                            if pu_paye > cible_ideale + 0.05:
-                                perte = (pu_paye - cible_ideale) * row['Quantité']
-                                motif = "Chute Remise"
-                                source_cible = f"{best_date}"
-                                remise_cible_str = f"{best_remise_val:g}%"
-                                detail_tech = f"(Cible sur Brut hist: {cible_ideale:.2f}€)"
+                            # Calcul de la cible théorique (Meilleure remise sur Brut actuel)
+                            # Mais attention à la magouille : si brut actuel est < 50% du brut hist, on prend le brut hist.
+                            ref_brut_calcul = brut_actuel
+                            if best_b > 0 and (brut_actuel / best_b) < 0.5:
+                                ref_brut_calcul = best_b
+                                
+                            cible = ref_brut_calcul * (1 - best_r / 100)
                             
-                            # CAS 2 : C'EST MOINS CHER (Vraie Promo !)
-                            elif pu_paye < cible_ideale - 0.05:
-                                # On crée une ligne "négative" ou marquée pour le rapport
-                                perte = 0.001 # On met une valeur minuscule pour qu'il passe le 'if perte > 0.01'
+                            if pu_paye > cible + 0.05:
+                                perte = (pu_paye - cible) * row['Quantité']
+                                motif = "Chute Remise / Magouille"
+                                source_cible = m['Date_Remise']
+                                remise_cible_str = f"{best_r:g}%"
+                            elif pu_paye < cible - 0.05:
+                                perte = 0.0001 # Marqueur pour affichage
                                 motif = "🔥 SUPER PROMO"
                                 source_cible = "Exception"
-                                remise_cible_str = "RECORD"
-                                gain_unitaire = cible_ideale - pu_paye
-                                detail_tech = f"Bravo ! Gain de {gain_unitaire:.2f}€/u par rapport à l'objectif."
+                                detail_tech = "Prix exceptionnel détecté"
+
+                        # CAS B : MODE PRIX NET (Pas de remise exploitable)
+                        else:
+                            best_p = m['Best_Price_Net']
+                            if pu_paye > best_p + 0.01:
+                                perte = (pu_paye - best_p) * row['Quantité']
+                                motif = "Hausse Prix Net"
+                                cible = best_p
+                                source_cible = m['Date_Price']
+                                detail_tech = f"(Ancien prix: {best_p:.2f}€)"
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -828,6 +839,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
