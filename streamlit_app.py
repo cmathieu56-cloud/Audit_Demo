@@ -490,11 +490,15 @@ if session:
             df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
             if not df_produits.empty:
-                df_clean = df_produits[df_produits['Article'] != 'SANS_REF']
-                if not df_clean.empty:
-                    best_rows = df_clean.sort_values('PU_Systeme').drop_duplicates('Article', keep='first')
-                    # 1. MÉMOIRE (Déjà présente dans ton code, je garde)
-                    ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
+                df_clean = df_produits[df_produits['Article'] != 'SANS_REF'].copy()
+                
+                # On crée une colonne temporaire pour trier par valeur de remise (64 > 50)
+                df_clean['Remise_Sort'] = df_clean['Remise'].apply(lambda x: float(str(x).replace('%', '')) if str(x).replace('%', '').replace('.', '').isdigit() else 0.0)
+                
+                # Tri décroissant : La meilleure remise en premier
+                best_rows = df_clean.sort_values('Remise_Sort', ascending=False).drop_duplicates('Article', keep='first')
+                
+                ref_map = best_rows.set_index('Article')[['PU_Systeme', 'Facture', 'Date', 'Remise', 'Prix Brut']].to_dict('index')
 
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
@@ -536,51 +540,44 @@ if session:
                 # --- LOGIQUE 2 : PRODUITS (Basée sur le % de Remise) ---
                 else:
                     article_courant = row['Article']
-                    # On nettoie la remise actuelle pour avoir un float (ex: 64.0)
-                    remise_actuelle_str = str(row['Remise']).replace('%', '')
-                    try:
-                        remise_actuelle = float(remise_actuelle_str)
-                    except:
-                        remise_actuelle = 0.0
+                    
+                    # 1. On nettoie la remise actuelle
+                    remise_actuelle = 0.0
+                    try: remise_actuelle = float(str(row['Remise']).replace('%', '').strip())
+                    except: pass
 
                     if article_courant in ref_map and article_courant != 'SANS_REF':
                         ref_info = ref_map[article_courant]
                         
-                        # On récupère la MEILLEURE remise historique (celle stockée en mémoire)
-                        # Attention : ref_map stockera désormais la meilleure remise
-                        best_remise_str = str(ref_info.get('Remise', '0')).replace('%', '')
-                        try:
-                            best_remise_val = float(best_remise_str)
-                        except:
-                            best_remise_val = 0.0
+                        # 2. On récupère la MEILLEURE remise historique
+                        best_remise_val = 0.0
+                        try: best_remise_val = float(str(ref_info.get('Remise', '0')).replace('%', '').strip())
+                        except: pass
                             
                         best_fac = ref_info['Facture']
                         best_date = ref_info['Date']
 
-                        # Si on a une baisse de remise (ex: on avait 70%, on a 50%)
-                        # On tolère 0.5% d'écart pour éviter les arrondis
+                        # 3. Comparaison : Si on a perdu plus de 0.5 point de remise
                         if best_remise_val > remise_actuelle + 0.5:
                             
-                            # On a besoin du PRIX BRUT actuel pour calculer la perte en euros
-                            # Perte = (Différence de % / 100) * Prix Brut * Quantité
+                            # On récupère le Prix Brut de la ligne ACTUELLE
                             prix_brut_row = 0.0
-                            try:
-                                prix_brut_row = float(str(row['Prix Brut']).replace(',', '.').strip())
+                            try: prix_brut_row = float(str(row['Prix Brut']).replace(',', '.').strip())
                             except: pass
                             
                             if prix_brut_row > 0:
-                                ecart_pourcent = best_remise_val - remise_actuelle
-                                perte = (prix_brut_row * ecart_pourcent / 100) * row['Quantité']
+                                # CORRECTION : La CIBLE est un PRIX en € calculé avec la meilleure remise
+                                cible = prix_brut_row * (1 - (best_remise_val / 100))
                                 
-                                cible = best_remise_val # La cible devient le %
+                                # La perte est la différence entre ce qu'on a payé et ce qu'on aurait dû payer
+                                pu_paye = row['PU_Systeme']
+                                if pu_paye > cible:
+                                    perte = (pu_paye - cible) * row['Quantité']
+                                
                                 motif = "Chute Remise"
                                 source_cible = f"{best_date}"
                                 remise_cible_str = f"{best_remise_val:g}%"
                                 detail_tech = f"(Tu avais {best_remise_val:g}% sur fac {best_fac}, là tu as {remise_actuelle:g}%)"
-
-                # ATTENTION : Il faut aussi modifier la constitution du ref_map plus haut !
-                # Je te donne le bloc suivant dans une seconde étape si tu valides celle-ci.
-
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
@@ -808,6 +805,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
