@@ -527,7 +527,7 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Méthode "Bibi" - Calcul Inversé) ---
+                # --- LOGIQUE 2 : PRODUITS (Méthode "Bibi" + Airbag Promo) ---
                 else:
                     article_courant = row['Article']
                     if article_courant in ref_map and article_courant != 'SANS_REF':
@@ -541,26 +541,33 @@ if session:
                         # Infos actuelles
                         curr_remise_v = row.get('Remise_Val', 0.0)
                         
-                        # CAS A : On travaille avec des Remises (Le mode "Yesss")
-                        # Si j'ai une remise aujourd'hui OU si j'en avais une avant
-                        if curr_remise_v > 0 or best_remise_v > 0:
-                            # On ne signale que si la remise a baissé (avec marge de 0.1)
+                        # CAS SPÉCIAL : "PROMO NET" (Remise à 0 mais bon prix)
+                        # Si Remise est 0 ET que le prix est meilleur que l'historique -> On zappe !
+                        if curr_remise_v < 1 and row['PU_Systeme'] <= best_price_hist:
+                            perte = 0 # C'est une bonne affaire, pas une perte
+                            
+                        # CAS CLASSIQUE : Analyse des Remises
+                        elif curr_remise_v > 0 or best_remise_v > 0:
+                            # On ne signale que si la remise a baissé
                             if best_remise_v > curr_remise_v + 0.1:
                                 motif = "Baisse de Remise"
                                 source_cible = f"{best_date}"
                                 remise_cible_str = ref_info['Remise']
                                 
-                                # LE CALCUL MAGIQUE : On reconstruit le juste prix sans lire le brut
-                                # Cible = Payé / (1 - Remise_Actuelle) * (1 - Remise_Record)
-                                coeff_actuel = 1 - (curr_remise_v / 100)
-                                coeff_cible = 1 - (best_remise_v / 100)
-                                
-                                if coeff_actuel > 0:
+                                # Si Remise Actuelle = 0 (mais prix plus cher que l'histoire), on compare au Prix Net Historique
+                                if curr_remise_v < 1:
+                                     cible = best_price_hist
+                                     detail_tech = f"(Promo absente: Payé {row['PU_Systeme']} vs Hist {best_price_hist})"
+                                # Sinon, calcul savant (Bibi Method)
+                                else:
+                                    coeff_actuel = 1 - (curr_remise_v / 100)
+                                    coeff_cible = 1 - (best_remise_v / 100)
                                     cible = (row['PU_Systeme'] / coeff_actuel) * coeff_cible
-                                    perte = (row['PU_Systeme'] - cible) * row['Quantité']
                                     detail_tech = f"(Contrat: {remise_cible_str} vs {row['Remise']})"
+                                
+                                perte = (row['PU_Systeme'] - cible) * row['Quantité']
 
-                        # CAS B : Pas de remise (Le mode "Prix Net" classique)
+                        # CAS B : Pas de remise du tout (Ni aujourd'hui, ni avant)
                         else:
                             if row['PU_Systeme'] > best_price_hist + 0.005:
                                 perte = (row['PU_Systeme'] - best_price_hist) * row['Quantité']
@@ -796,6 +803,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
