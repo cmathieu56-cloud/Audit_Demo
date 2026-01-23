@@ -533,47 +533,53 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE 2 : PRODUITS (Hausse de prix) ---
+                # --- LOGIQUE 2 : PRODUITS (Basée sur le % de Remise) ---
                 else:
                     article_courant = row['Article']
+                    # On nettoie la remise actuelle pour avoir un float (ex: 64.0)
+                    remise_actuelle_str = str(row['Remise']).replace('%', '')
+                    try:
+                        remise_actuelle = float(remise_actuelle_str)
+                    except:
+                        remise_actuelle = 0.0
+
                     if article_courant in ref_map and article_courant != 'SANS_REF':
                         ref_info = ref_map[article_courant]
-                        best_price = ref_info['PU_Systeme']
+                        
+                        # On récupère la MEILLEURE remise historique (celle stockée en mémoire)
+                        # Attention : ref_map stockera désormais la meilleure remise
+                        best_remise_str = str(ref_info.get('Remise', '0')).replace('%', '')
+                        try:
+                            best_remise_val = float(best_remise_str)
+                        except:
+                            best_remise_val = 0.0
+                            
                         best_fac = ref_info['Facture']
                         best_date = ref_info['Date']
-                        
-                        # 3. LOGIQUE RÉCUPÉRATION (Avec Sécurité Anti-Crash)
-                        best_remise = str(ref_info.get('Remise', '-')) 
-                        
-                        try:
-                            # On essaie de convertir, si ça rate on met 0.0
-                            val_temp = ref_info.get('Prix Brut', 0.0)
-                            best_brut = float(str(val_temp).replace(',', '.').strip())
-                        except:
-                            best_brut = 0.0
-                            
-                        curr_brut = 0.0
-                        if row['Prix Brut']:
-                            try:
-                                curr_brut = float(str(row['Prix Brut']).replace(',', '.').strip())
-                            except: pass
 
-                        if row['PU_Systeme'] > best_price + 0.005:
-                            ecart_u = row['PU_Systeme'] - best_price
-                            perte = ecart_u * row['Quantité']
-                            cible = best_price
-                            motif = "Hausse Prix"
-                            source_cible = f"{best_date}"
+                        # Si on a une baisse de remise (ex: on avait 70%, on a 50%)
+                        # On tolère 0.5% d'écart pour éviter les arrondis
+                        if best_remise_val > remise_actuelle + 0.5:
                             
-                            # On stocke la remise texte
-                            remise_cible_str = best_remise
+                            # On a besoin du PRIX BRUT actuel pour calculer la perte en euros
+                            # Perte = (Différence de % / 100) * Prix Brut * Quantité
+                            prix_brut_row = 0.0
+                            try:
+                                prix_brut_row = float(str(row['Prix Brut']).replace(',', '.').strip())
+                            except: pass
                             
-                            details = [f"(Facture {best_fac})"]
-                            # ALERTE HAUSSE BRUT
-                            if best_brut > 0 and curr_brut > best_brut + 0.01:
-                                details.append(f"Hausse Tarif Brut ({best_brut:.2f} -> {curr_brut:.2f})")
-                            
-                            detail_tech = " ".join(details)
+                            if prix_brut_row > 0:
+                                ecart_pourcent = best_remise_val - remise_actuelle
+                                perte = (prix_brut_row * ecart_pourcent / 100) * row['Quantité']
+                                
+                                cible = best_remise_val # La cible devient le %
+                                motif = "Chute Remise"
+                                source_cible = f"{best_date}"
+                                remise_cible_str = f"{best_remise_val:g}%"
+                                detail_tech = f"(Tu avais {best_remise_val:g}% sur fac {best_fac}, là tu as {remise_actuelle:g}%)"
+
+                # ATTENTION : Il faut aussi modifier la constitution du ref_map plus haut !
+                # Je te donne le bloc suivant dans une seconde étape si tu valides celle-ci.
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -802,6 +808,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
