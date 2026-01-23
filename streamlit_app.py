@@ -701,7 +701,7 @@ if session:
                             st.markdown(f"**📦 {article}** - {nom_art} | Cible: **{prix_ref:.4f} €** (Remise {remise_ref}) au {date_ref}")
                             
                             sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
-                            html_detail = sub_df.style.format({'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})\
+                            html_detail = sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})\
                             .set_properties(**{
                                 'text-align': 'center', 'border': '1px solid black', 'color': 'black'
                             })\
@@ -780,5 +780,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
