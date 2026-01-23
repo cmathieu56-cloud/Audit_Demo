@@ -510,7 +510,7 @@ if session:
                     valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
                     best_r_row = valid_remises.iloc[0] if not valid_remises.empty else group.iloc[0]
                     
-                    # 2. On cherche le meilleur prix net (PU_Systeme)
+                    # 2. On cherche le meilleur prix unitaire net absolu
                     valid_prices = group[group['PU_Systeme'] > 0.001].sort_values('PU_Systeme', ascending=True)
                     best_p_row = valid_prices.iloc[0] if not valid_prices.empty else group.iloc[0]
 
@@ -518,6 +518,7 @@ if session:
                         'Best_Remise': best_r_row['Remise_Val'],
                         'Best_Brut_Associe': clean_float(best_r_row['Prix Brut']),
                         'Best_Price_Net': best_p_row['PU_Systeme'],
+                        'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': best_r_row['Date'],
                         'Date_Price': best_p_row['Date'],
                         'Fac_Remise': best_r_row['Facture']
@@ -749,7 +750,18 @@ if session:
                                     # NOUVEAU TITRE : Focus 100% sur la Remise
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}** (Vu le {date_ref})")
                                     
-                                    # Tableau : On garde Payé (U) pour vérifier la facture, mais c'est tout.
+                                    # --- CONTROLE ANTI-ARNAQUE (Ecart > 15%) ---
+                                    if article in ref_map:
+                                        m = ref_map[article]
+                                        p_ref_remise = m.get('Price_At_Best_Remise', 0)
+                                        p_record_abs = m.get('Best_Price_Net', 0)
+                                        
+                                        if p_record_abs > 0 and p_ref_remise > (p_record_abs * 1.15):
+                                            st.error(f"⚠️ **ATTENTION : Arnaque probable sur le tarif de référence !** \n"
+                                                     f"La remise de **{remise_ref}** est basée sur un prix brut gonflé.  \n"
+                                                     f"Prix payé ce jour-là : **{p_ref_remise:.2f}€** | Meilleur prix historique : **{p_record_abs:.2f}€**")
+                                    # --------------------------------------------
+
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
                                     
                                     html_detail = (
@@ -835,6 +847,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
