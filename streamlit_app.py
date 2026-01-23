@@ -540,50 +540,48 @@ if session:
                 # --- LOGIQUE 2 : PRODUITS (Basée sur le % de Remise) ---
                 else:
                     article_courant = row['Article']
-                    
-                    # 1. On nettoie la remise actuelle
-                    remise_actuelle = 0.0
-                    try: remise_actuelle = float(str(row['Remise']).replace('%', '').strip())
-                    except: pass
+                    remise_actuelle = clean_float(str(row['Remise']).replace('%', ''))
 
                     if article_courant in ref_map and article_courant != 'SANS_REF':
                         ref_info = ref_map[article_courant]
                         
-                        best_remise_val = 0.0
-                        try: best_remise_val = float(str(ref_info.get('Remise', '0')).replace('%', '').strip())
-                        except: pass
-                            
+                        best_remise_val = clean_float(str(ref_info.get('Remise', '0')).replace('%', ''))
                         best_fac = ref_info['Facture']
                         best_date = ref_info['Date']
                         
-                        # RECUPERATION DU PRIX BRUT HISTORIQUE (Le "Vrai" prix catalogue)
-                        ref_brut_hist = 0.0
-                        try: ref_brut_hist = float(str(ref_info.get('Prix Brut', '0')).replace(',', '.').strip())
-                        except: pass
+                        # RECUPERATION ROBUSTE DU PRIX BRUT HISTORIQUE
+                        ref_brut_hist = clean_float(ref_info.get('Prix Brut', '0'))
+                        ref_net_hist = ref_info.get('PU_Systeme', 0.0)
 
-                        # 3. Comparaison : Si on a perdu plus de 0.5 point de remise
+                        # AUTO-CORRECTION : Si le Brut Historique semble être du Net (incohérent avec la remise)
+                        # Ex: Remise 75%, Net 53€, mais Brut affiché 53€ -> Le Vrai Brut est 212€
+                        if best_remise_val > 10 and ref_brut_hist > 0:
+                            theorique_net = ref_brut_hist * (1 - best_remise_val/100)
+                            # Si l'écart est énorme (> 10%), on recalcule le VRAI brut théorique
+                            if abs(theorique_net - ref_net_hist) > (ref_net_hist * 0.1):
+                                if (1 - best_remise_val/100) > 0:
+                                    ref_brut_hist = ref_net_hist / (1 - best_remise_val/100)
+
+                        # Comparaison : Si on a perdu plus de 0.5 point de remise
                         if best_remise_val > remise_actuelle + 0.5:
                             
-                            prix_brut_row = 0.0
-                            try: prix_brut_row = float(str(row['Prix Brut']).replace(',', '.').strip())
-                            except: pass
+                            prix_brut_row = clean_float(row['Prix Brut'])
                             
                             # --- SECURITE ANTI-ABSURDITE ---
-                            # Si le Prix Brut actuel est minuscule par rapport au Prix Brut Historique (< 50%)
-                            # C'est que la facture actuelle affiche du NET dans la colonne BRUT.
-                            # Dans ce cas, on ne peut pas appliquer la remise, on ignore.
+                            # Si le Brut actuel est minuscule (< 50%) par rapport au Brut Historique (recalculé)
+                            # C'est que la ligne actuelle est en Net (ex: ton Green Up à 115€ vs 322€)
                             is_fake_gross = False
                             if ref_brut_hist > 5 and prix_brut_row > 0:
                                 ratio = prix_brut_row / ref_brut_hist
-                                if ratio < 0.5: # Seuil de sécurité (ex: 46€ vs 214€ -> ratio 0.21 -> Fake)
+                                if ratio < 0.5: 
                                     is_fake_gross = True
                             
                             if prix_brut_row > 0 and not is_fake_gross:
-                                # La CIBLE est un PRIX en € calculé avec la meilleure remise
+                                # La CIBLE est calculée sur le Brut Actuel avec la Meilleure Remise
                                 cible = prix_brut_row * (1 - (best_remise_val / 100))
                                 
                                 pu_paye = row['PU_Systeme']
-                                if pu_paye > cible + 0.02: # Petite tolérance centimes
+                                if pu_paye > cible + 0.02:
                                     perte = (pu_paye - cible) * row['Quantité']
                                 
                                     motif = "Chute Remise"
@@ -825,6 +823,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
