@@ -713,26 +713,22 @@ if session:
                 pivot_combo.index.name = None
                 pivot_combo.columns.name = None
                 
-                # 5. Affichage HTML
-                c_podium, c_metric = st.columns([2, 1])
-                with c_metric:
-                    st.metric("💸 PERTE TOTALE", f"{total_perte:.2f} €", delta_color="inverse")
-        
-                with c_podium:
-                    html_podium = pivot_combo.style.format({'Dette Totale (€)': "{:.2f} €"})\
-                    .set_properties(**{
-                        'text-align': 'center', 
-                        'border': '2px solid black', 
-                        'color': 'black', 
-                        'font-weight': 'bold',
-                        'white-space': 'pre-wrap'
-                    })\
-                    .set_table_styles([
-                        {'selector': 'th', 'props': [('background-color', '#ffcccb'), ('color', 'black'), ('text-align', 'center'), ('border', '2px solid black')]},
-                        {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]}
-                    ]).to_html()
-        
-                    st.markdown(html_podium, unsafe_allow_html=True)
+                # --- SUPPRESSION DU DOUBLE AFFICHAGE (st.metric retiré) ---
+                # On affiche directement le tableau HTML sans les colonnes parasites
+                html_podium = pivot_combo.style.format({'Dette Totale (€)': "{:.2f} €"})\
+                .set_properties(**{
+                    'text-align': 'center', 
+                    'border': '2px solid black', 
+                    'color': 'black', 
+                    'font-weight': 'bold',
+                    'white-space': 'pre-wrap'
+                })\
+                .set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ffcccb'), ('color', 'black'), ('text-align', 'center'), ('border', '2px solid black')]},
+                    {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%')]}
+                ]).to_html()
+                
+                st.markdown(html_podium, unsafe_allow_html=True)
                 
                 st.divider()
                 st.subheader("🕵️ Détails par Fournisseur")
@@ -862,6 +858,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
