@@ -470,8 +470,9 @@ if session:
                 matrice_achats['TOTAL PÉRIODE'] = matrice_achats.sum(axis=1)
                 matrice_achats = matrice_achats.sort_values('TOTAL PÉRIODE', ascending=False)
                 
-                # 3. Génération HTML avec CSS FORCÉ (Bordures noires 2px)
-                # On utilise to_html pour contourner les limitations de st.dataframe
+                # [CORRECTION] On supprime le titre de la colonne index "Fournisseur"
+                matrice_achats.index.name = None
+                
                 html_code = matrice_achats.style.format("{:.2f} €")\
                     .set_properties(**{
                         'text-align': 'center', 
@@ -858,6 +859,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
