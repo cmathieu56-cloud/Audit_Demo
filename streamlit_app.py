@@ -787,9 +787,7 @@ if session:
                                             txt_prix_cible = f" 👉 Soit **{valeur_cible_reelle:.4f} €**"
                                         else:
                                             txt_prix_cible = ""
-                                    except:
-                                        txt_prix_cible = ""
-                                    except: 
+                                    except:                                       
                                         # En cas de bug (division par zéro, texte bizarre), on n'affiche rien pour pas planter
                                         txt_prix_cible = ""
 
@@ -931,6 +929,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
