@@ -559,8 +559,7 @@ if session:
                         market_map[a] = {'taux': m['best_discount'], 'fourn': m['fournisseur'], 'date': m['date_ref']}
             except: market_map = {}
             # -----------------------------------------------
-                    }
-            
+
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
 
@@ -901,5 +900,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
