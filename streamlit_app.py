@@ -579,8 +579,11 @@ if session:
                 
                 perte = 0
                 motif = ""
-                cible = 0.0 
+                cible = 0.0                 
                 source_cible = "-"
+                # Louis : On crée une variable vide au début de chaque ligne.
+                # Elle servira à stocker le "Vrai Prix Historique" si on en trouve un.
+                prix_historique_ref = 0.
                 detail_tech = ""
                 # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
                 remise_cible_str = "-" 
@@ -610,6 +613,12 @@ if session:
                     
                     if art in ref_map and art != 'SANS_REF':
                         m = ref_map[art]
+
+# --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
+                        # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
+                        # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
+                        # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
+                        prix_historique_ref = m['Price_At_Best_Remise']
                         
                         # REGLE 1 : SECURITE ABSOLUE (Berner)
                         # Si on paye le prix record ou moins, perte = 0
@@ -667,6 +676,11 @@ if session:
                         # On utilise 'remise_cible_str' car c'est la seule variable qui existe ici.
                         "Prix Cible": f"{(clean_float(str(row['Prix Brut'])) * (1 - clean_float(str(remise_cible_str).replace('%',''))/100)):.4f} €",
                         "Perte": perte,
+                        "Prix Cible": f"{cible:.4f} €", # (Celle qu'on a corrigée juste avant)
+# --- AJOUT SPECIAL LOUIS : ON MET L'INFO DANS LE TUYAU ---
+                        # Louis : On ajoute une colonne invisible "Prix_Ref_Hist" dans les données.
+                        # Elle sert juste à transporter le prix de 56.75€ jusqu'à l'affichage du titre plus bas.
+                        "Prix_Ref_Hist": prix_historique_ref,
                         "Motif": motif,
                         "Date Facture": row['Date'],
                         "Source Cible": source_cible,     
@@ -778,16 +792,14 @@ if session:
                                     remise_ref = group['Remise Cible'].iloc[0]
                                     nom_art = group['Désignation'].iloc[0]
 
-# --- CORRECTION TITRE (ON PREND LE VRAI PRIX CIBLE, PAS LE CALCUL THEORIQUE) ---
-                                    # Au lieu de recalculer "Brut * %" (qui donne 36€ car le brut a baissé),
-                                    # on prend directement la valeur 'Cible (U)' que l'algorithme a choisie (ex: 56.75€).
+# --- CORRECTION FINALE TITRE (SPECIAL LOUIS) ---
+                                    # Louis : Au lieu de faire un calcul (Prix * %), on lit juste la valeur qu'on a transportée.
                                     try:
-                                        # Ici on prend le VRAI montant cible calculé par l'algo (ex: 56.75€)
-                                        # C'est ce chiffre qui doit s'afficher à côté du pourcentage dans le titre.
-                                        valeur_cible_reelle = group['Cible (U)'].iloc[0]
+                                        val_hist = group['Prix_Ref_Hist'].iloc[0]
                                         
-                                        if valeur_cible_reelle > 0:
-                                            txt_prix_cible = f" 👉 Soit **{valeur_cible_reelle:.4f} €**"
+                                        # Si on a un prix historique (ex: 56.75), on l'affiche.
+                                        if val_hist > 0:
+                                            txt_prix_cible = f" 👉 Soit **{val_hist:.4f} €**"
                                         else:
                                             txt_prix_cible = ""
                                     except:
@@ -931,6 +943,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
