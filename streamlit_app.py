@@ -664,9 +664,8 @@ if session:
                         "Désignation": row['Désignation'],
                         "Payé (U)": row['PU_Systeme'],
                         "Cible (U)": cible,
-                        # On calcule le prix net théorique (Prix Brut du jour * Remise Objectif)
-                        # Comme ça, même si le brut change (cuivre), Le commercial voit le "Vrai" prix à atteindre.
-                        "Prix Cible": f"{(clean_float(str(row['Prix Brut'])) * (1 - clean_float(str(remise_ref).replace('%',''))/100)):.4f} €",
+                        # On utilise 'remise_cible_str' car c'est la seule variable qui existe ici.
+                        "Prix Cible": f"{(clean_float(str(row['Prix Brut'])) * (1 - clean_float(str(remise_cible_str).replace('%',''))/100)):.4f} €",
                         "Perte": perte,
                         "Motif": motif,
                         "Date Facture": row['Date'],
@@ -940,6 +939,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
