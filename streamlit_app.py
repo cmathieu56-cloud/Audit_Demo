@@ -529,6 +529,20 @@ if session:
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
                     remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
 
+                    # --- CORRECTION LOGIQUE "PRIX NET" vs "PRIX BRUT" ---
+                    # Si le meilleur prix est un "Net" (0 remise) et qu'il est meilleur que le prix remisé habituel
+                    # Alors on recalcule la remise théorique en utilisant le Brut du prix remisé.
+                    p_net_record = best_p_row['PU_Systeme']
+                    p_net_standard = best_r_row['PU_Systeme']
+                    
+                    if p_net_record < (p_net_standard - 0.05) and best_p_row['Remise_Val'] == 0:
+                        brut_ref = clean_float(best_r_row['Prix Brut'])
+                        if brut_ref > 0:
+                            # Calcul inverse : Quelle remise donne ce prix net sur ce brut ?
+                            taux_virtuel = (1 - (p_net_record / brut_ref)) * 100
+                            remise_finale = round(taux_virtuel, 2)
+                    # ----------------------------------------------------
+
                     ref_map[art] = {
                         'Best_Remise': remise_finale,
                         'Best_Brut_Associe': clean_float(best_r_row['Prix Brut']),
@@ -859,6 +873,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
