@@ -852,9 +852,8 @@ if session:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                             sauvegarder_accord(article, "ERREUR", 0)
                                             st.rerun()
-                                    # ------------------------------------
-
-                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte']]
+                                    # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
+                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
                                     
                                     html_detail = (
                                         sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
@@ -939,6 +938,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
