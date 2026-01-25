@@ -778,24 +778,17 @@ if session:
                                     remise_ref = group['Remise Cible'].iloc[0]
                                     nom_art = group['Désignation'].iloc[0]
 
-# --- AJOUT SPECIAL LOUIS : CALCUL DU PRIX CIBLE EN EUROS ---
-                                    # Le but : Ne pas afficher que des %, mais parler en Euros concrets.
+# --- CORRECTION TITRE (ON PREND LE VRAI PRIX CIBLE, PAS LE CALCUL THEORIQUE) ---
+                                    # Au lieu de recalculer "Brut * %" (qui donne 36€ car le brut a baissé),
+                                    # on prend directement la valeur 'Cible (U)' que l'algorithme a choisie (ex: 56.75€).
                                     try:
-                                        # 1. On récupère le Prix Brut catalogue de la ligne (ex: 10.00 €)
-                                        p_brut_val = clean_float(str(group['Prix Brut'].iloc[0]))
-                                        
-                                        # 2. On nettoie la remise cible (on vire le '%' pour avoir un nombre : 50)
-                                        r_cible_val = clean_float(str(remise_ref).replace('%', ''))
-                                        
-                                        # 3. Sécurité : On ne calcule que si on a des chiffres valides
-                                        if p_brut_val > 0 and r_cible_val > 0:
-                                            # Le calcul comptable : Prix Net = Brut * (1 - Taux/100)
-                                            p_cible_calc = p_brut_val * (1 - r_cible_val/100)
-                                            
-                                            # On formate le texte pour l'affichage (ex: "👉 Soit 5.0000 €")
-                                            txt_prix_cible = f" 👉 Soit **{p_cible_calc:.4f} €**"
+                                        valeur_cible_reelle = group['Cible (U)'].iloc[0]
+                                        if valeur_cible_reelle > 0:
+                                            txt_prix_cible = f" 👉 Soit **{valeur_cible_reelle:.4f} €**"
                                         else:
                                             txt_prix_cible = ""
+                                    except:
+                                        txt_prix_cible = ""
                                     except: 
                                         # En cas de bug (division par zéro, texte bizarre), on n'affiche rien pour pas planter
                                         txt_prix_cible = ""
@@ -938,6 +931,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
