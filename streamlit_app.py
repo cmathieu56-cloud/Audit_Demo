@@ -782,13 +782,15 @@ if session:
                                     # Au lieu de recalculer "Brut * %" (qui donne 36€ car le brut a baissé),
                                     # on prend directement la valeur 'Cible (U)' que l'algorithme a choisie (ex: 56.75€).
                                     try:
+                                        # Ici on prend le VRAI montant cible calculé par l'algo (ex: 56.75€)
+                                        # C'est ce chiffre qui doit s'afficher à côté du pourcentage dans le titre.
                                         valeur_cible_reelle = group['Cible (U)'].iloc[0]
+                                        
                                         if valeur_cible_reelle > 0:
                                             txt_prix_cible = f" 👉 Soit **{valeur_cible_reelle:.4f} €**"
                                         else:
                                             txt_prix_cible = ""
-                                    except:                                       
-                                        # En cas de bug (division par zéro, texte bizarre), on n'affiche rien pour pas planter
+                                    except:
                                         txt_prix_cible = ""
 
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
@@ -929,6 +931,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
