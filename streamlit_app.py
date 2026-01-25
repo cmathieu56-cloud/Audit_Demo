@@ -552,6 +552,19 @@ if session:
                         'Date_Price': best_p_row['Date']
                     }
             
+                    # --- INSERTION : ALIMENTATION BASE MARCHÉ (SILENCIEUSE) ---
+                    if remise_finale > 0:
+                        try:
+                            supabase.table("market_rates").upsert({
+                                "user_id": user_id,
+                                "article": art,
+                                "fournisseur": best_r_row['Fournisseur'],
+                                "remise": remise_finale,
+                                "date_ref": best_r_row['Date']
+                            }).execute()
+                        except: pass
+                    # ----------------------------------------------------------
+            
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
 
@@ -873,5 +886,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
