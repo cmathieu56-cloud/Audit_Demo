@@ -529,16 +529,19 @@ if session:
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
                     remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
 
-                    # --- INSERTION 1 : Recalcul Inversé (Prix Net Record) ---
+                    # --- CORRECTION LOGIQUE "PRIX NET" vs "PRIX BRUT" ---
+                    # Si le meilleur prix est un "Net" (0 remise) et qu'il est meilleur que le prix remisé habituel
+                    # Alors on recalcule la remise théorique en utilisant le Brut du prix remisé.
                     p_net_record = best_p_row['PU_Systeme']
                     p_net_standard = best_r_row['PU_Systeme']
                     
                     if p_net_record < (p_net_standard - 0.05) and best_p_row['Remise_Val'] == 0:
                         brut_ref = clean_float(best_r_row['Prix Brut'])
                         if brut_ref > 0:
+                            # Calcul inverse : Quelle remise donne ce prix net sur ce brut ?
                             taux_virtuel = (1 - (p_net_record / brut_ref)) * 100
                             remise_finale = round(taux_virtuel, 2)
-                    # --------------------------------------------------------
+                    # ----------------------------------------------------
 
                     ref_map[art] = {
                         'Best_Remise': remise_finale,
@@ -549,17 +552,6 @@ if session:
                         'Date_Price': best_p_row['Date']
                     }
             
-            # --- INSERTION 2 : Chargement Données Marché ---
-            try:
-                res_market = supabase.table("market_rates").select("*").neq("user_id", user_id).execute()
-                market_map = {}
-                for m in res_market.data:
-                    a = m['article']
-                    if a not in market_map or m['best_discount'] > market_map[a]['taux']:
-                        market_map[a] = {'taux': m['best_discount'], 'fourn': m['fournisseur'], 'date': m['date_ref']}
-            except: market_map = {}
-            # -----------------------------------------------
-
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
 
@@ -579,24 +571,6 @@ if session:
                 detail_tech = ""
                 # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
                 remise_cible_str = "-" 
-                
-                # --- INSERTION 3 : Comparaison & Envoi ---
-                info_market = market_map.get(row['Article'])
-                market_txt = "-"
-                my_best = ref_map.get(row['Article'], {}).get('Best_Remise', 0)
-                
-                if info_market:
-                    if my_best >= info_market['taux']: market_txt = f"👑 Top ({info_market['taux']}%)"
-                    else: market_txt = f"⚠️ Marché: {info_market['taux']}% ({info_market['fourn']})"
-
-                if my_best > 0:
-                     try:
-                         supabase.table("market_rates").upsert({
-                             "user_id": user_id, "article": row['Article'], "fournisseur": row['Fournisseur'],
-                             "best_discount": my_best, "date_ref": ref_map[row['Article']]['Date_Price'],
-                             "updated_at": datetime.now().isoformat()
-                         }).execute()
-                     except: pass
                 
                 # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
                 if row['Famille'] == "FRAIS GESTION":
@@ -672,7 +646,6 @@ if session:
                         "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
                         "Remise Cible": remise_cible_str, # 4. AFFICHAGE (Corrigé)
-                        "Comparatif Marché": market_txt, # <--- INSERTION 4
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
@@ -900,6 +873,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
 
 
