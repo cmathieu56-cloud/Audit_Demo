@@ -874,32 +874,3 @@ if session:
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
