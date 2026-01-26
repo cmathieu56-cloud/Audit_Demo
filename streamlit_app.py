@@ -291,6 +291,8 @@ if session:
         st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
     st.title("🏗️ Audit V21 - Logique Universelle")
+    # --- AJOUT : OPTION POUR FAIRE UN JOLI PDF ---
+    mode_pdf = st.sidebar.checkbox("🖨️ Mode Rapport (Prêt à imprimer)", value=False)
 
     try:
         res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
@@ -782,7 +784,11 @@ if session:
                     
                     fourn_dette = total_dette_fourn.get(fourn_nom, 0)
                     
-                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=False):
+                    # Louis : On définit si le dossier doit être ouvert (True) ou fermé (False)
+                    is_expanded = True if mode_pdf else False
+
+                    # On applique la variable 'is_expanded' ici
+                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=is_expanded):
                         df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
                         
                         for article, group in df_litiges_fourn.groupby('Ref'):
@@ -811,8 +817,14 @@ if session:
                                     # On crée une clé unique en combinant Fournisseur + Article
                                     # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
                                     cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
+                                    # Louis : Si on est en MODE PDF, on saute l'affichage des boutons
+                                    if not mode_pdf:
+                                        c_bt1, c_bt2, c_bt3 = st.columns(3)
+                                        
+                                        with c_bt1:
+                                            # ... (Tout le code des boutons doit être décalé vers la droite/indenté sous le if) ...
+                                            # Astuce : Si tu ne veux pas tout décaler, dis-le moi, je te donne le bloc entier.
                                     
-                                    with c_bt1:
 
 # --- REMPLACEMENT AVEC COMMENTAIRES POUR LOUIS ---
                                         # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
@@ -942,6 +954,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
