@@ -675,8 +675,7 @@ if session:
                         "Cible (U)": cible,
                         # On utilise 'remise_cible_str' car c'est la seule variable qui existe ici.
                         "Prix Cible": f"{(clean_float(str(row['Prix Brut'])) * (1 - clean_float(str(remise_cible_str).replace('%',''))/100)):.4f} €",
-                        "Perte": perte,
-                        "Prix Cible": f"{cible:.4f} €", # (Celle qu'on a corrigée juste avant)
+                        "Perte": perte,                        
 # --- AJOUT SPECIAL LOUIS : ON MET L'INFO DANS LE TUYAU ---
                         # Louis : On ajoute une colonne invisible "Prix_Ref_Hist" dans les données.
                         # Elle sert juste à transporter le prix de 56.75€ jusqu'à l'affichage du titre plus bas.
@@ -943,6 +942,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
