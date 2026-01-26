@@ -291,8 +291,7 @@ if session:
         st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
     st.title("🏗️ Audit V21 - Logique Universelle")
-    # Cette case permet de passer en mode "Impression propre"
-    mode_pdf = st.sidebar.checkbox("🖨️ Mode Rapport (Prêt à imprimer)", value=False)
+    # Cette case permet de passer en mode "Impression propre"    
     try:
         res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
         memoire_full = {r['file_name']: r for r in res_db.data}
@@ -403,8 +402,23 @@ if session:
 
     df = pd.DataFrame(all_rows)
 
-    tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
+    # --- MODIF LOUIS : FILTRE SPECIAL YESSS & BOUTON PAGE ---
+    
+    # 1. On ne garde que YESSS (Filtrage dur)
+    if not df.empty:
+        df = df[df['Fournisseur'].str.contains("YESSS", case=False, na=False)]
 
+    # 2. On place le bouton ICI (dans la page principale) pour pouvoir fermer la sidebar
+    col_titre_pdf, _ = st.columns([1, 4])
+    with col_titre_pdf:
+        mode_pdf = st.checkbox("🖨️ Mode Rapport PDF", value=False)
+        
+    if mode_pdf:
+        st.info("💡 Astuce : Fermez la barre latérale (la croix ou la flèche 'build' en haut à gauche) pour avoir le tableau en pleine largeur avant d'imprimer.")
+
+    # --------------------------------------------------------
+
+    tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
     with tab_config:
         st.header("🛠️ Réglages Fournisseurs")
         
@@ -945,6 +959,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
