@@ -830,61 +830,61 @@ if session:
                                         # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
                                         accord_existant = registre.get(article)
 
-                                        if accord_existant and accord_existant['type'] == "CONTRAT":
-                                            # CAS A : OUI, un contrat est déjà verrouillé.
-                                            # -> On affiche la valeur figée et l'interface pour la modifier (Input + Bouton)
-                                            st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
-                                            
-                                            # On découpe la colonne en 2 : une petite pour saisir, une grande pour valider
-                                            col_mod_input, col_mod_btn = st.columns([2, 3])
-                                            
-                                            with col_mod_input:
-                                                # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
-                                                nouvelle_remise_val = st.number_input(
-                                                    label="Modif Remise",
-                                                    value=float(accord_existant['valeur']),
-                                                    step=0.5,
-                                                    format="%.2f",
-                                                    key=f"input_mod_{cle_unique}",
-                                                    label_visibility="collapsed" # On cache le label pour gagner de la place
-                                                )
-                                            
-                                            with col_mod_btn:
-                                                # Bouton de sauvegarde de la modification
-                                                if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val)
-                                                    st.rerun() # Rafraîchissement immédiat de la page
-                                        else:
-                                            # CAS B : NON, c'est libre.
-                                            # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
-                                            if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
+                                            if accord_existant and accord_existant['type'] == "CONTRAT":
+                                                # CAS A : OUI, un contrat est déjà verrouillé.
+                                                # -> On affiche la valeur figée et l'interface pour la modifier (Input + Bouton)
+                                                st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
+                                                
+                                                # On découpe la colonne en 2 : une petite pour saisir, une grande pour valider
+                                                col_mod_input, col_mod_btn = st.columns([2, 3])
+                                                
+                                                with col_mod_input:
+                                                    # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
+                                                    nouvelle_remise_val = st.number_input(
+                                                        label="Modif Remise",
+                                                        value=float(accord_existant['valeur']),
+                                                        step=0.5,
+                                                        format="%.2f",
+                                                        key=f"input_mod_{cle_unique}",
+                                                        label_visibility="collapsed" # On cache le label pour gagner de la place
+                                                    )
+                                                
+                                                with col_mod_btn:
+                                                    # Bouton de sauvegarde de la modification
+                                                    if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                                        sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val)
+                                                        st.rerun() # Rafraîchissement immédiat de la page
+                                            else:
+                                                # CAS B : NON, c'est libre.
+                                                # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
+                                                if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
+                                                    sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
+                                                    st.rerun()
+                                        with c_bt2:
+                                            if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                                sauvegarder_accord(article, "PROMO", 0)
                                                 st.rerun()
-                                    with c_bt2:
-                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            sauvegarder_accord(article, "PROMO", 0)
-                                            st.rerun()
-                                    with c_bt3:
-                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                            sauvegarder_accord(article, "ERREUR", 0)
-                                            st.rerun()
-                                    # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
-                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
-                                    
-                                    html_detail = (
-                                        sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
-                                        .set_properties(**{
-                                            'text-align': 'center', 'border': '1px solid black', 'color': 'black'
-                                        })
-                                        .set_table_styles([
-                                            {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
-                                            {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
-                                        ])
-                                        .hide(axis="index")
-                                        .to_html()
-                                    )
-                                    
-                                    st.markdown(html_detail, unsafe_allow_html=True)
+                                        with c_bt3:
+                                            if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
+                                                sauvegarder_accord(article, "ERREUR", 0)
+                                                st.rerun()
+                                        # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
+                                        sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
+                                        
+                                        html_detail = (
+                                            sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
+                                            .set_properties(**{
+                                                'text-align': 'center', 'border': '1px solid black', 'color': 'black'
+                                            })
+                                            .set_table_styles([
+                                                {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
+                                                {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
+                                            ])
+                                            .hide(axis="index")
+                                            .to_html()
+                                        )
+                                        
+                                        st.markdown(html_detail, unsafe_allow_html=True)
                     
 
     with tab_import:
@@ -954,6 +954,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
