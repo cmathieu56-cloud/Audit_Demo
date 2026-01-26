@@ -291,7 +291,8 @@ if session:
         st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
     st.title("🏗️ Audit V21 - Logique Universelle")
-
+    # Cette case permet de passer en mode "Impression propre"
+    mode_pdf = st.sidebar.checkbox("🖨️ Mode Rapport (Prêt à imprimer)", value=False)
     try:
         res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
         memoire_full = {r['file_name']: r for r in res_db.data}
@@ -781,8 +782,12 @@ if session:
                     if fourn_nom == "TOTAL GÉNÉRAL": continue
                     
                     fourn_dette = total_dette_fourn.get(fourn_nom, 0)
+                    # Si la case PDF est cochée (mode_pdf est True), on force l'ouverture (True).
+                    # Sinon, on laisse fermé par défaut (False).
+                    etat_ouverture = True if mode_pdf else False
+                    df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
                     
-                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=False):
+                    with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=etat_ouverture):
                         df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
                         
                         for article, group in df_litiges_fourn.groupby('Ref'):
@@ -806,56 +811,54 @@ if session:
 
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
                                     
-                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
-                                    c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                    # On crée une clé unique en combinant Fournisseur + Article
-                                    # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
+                                    # --- MODIF POUR MON FRERE : CACHER LES BOUTONS EN PDF ---
+                                    # On calcule la clé unique AVANT le bloc conditionnel
                                     cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
-                                    
-                                    with c_bt1:
 
-# --- REMPLACEMENT AVEC COMMENTAIRES POUR LOUIS ---
-                                        # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
+                                    # Si on N'EST PAS en mode PDF, on affiche les boutons.
+                                    # Si on EST en mode PDF, le programme saute tout ce bloc et n'affiche rien.
+                                    if not mode_pdf:
+                                        c_bt1, c_bt2, c_bt3 = st.columns(3)
+                                        
+                                        # On récupère l'info du registre pour savoir quoi afficher
                                         accord_existant = registre.get(article)
 
-                                        if accord_existant and accord_existant['type'] == "CONTRAT":
-                                            # CAS A : OUI, un contrat est déjà verrouillé.
-                                            # -> On affiche la valeur figée et l'interface pour la modifier (Input + Bouton)
-                                            st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
-                                            
-                                            # On découpe la colonne en 2 : une petite pour saisir, une grande pour valider
-                                            col_mod_input, col_mod_btn = st.columns([2, 3])
-                                            
-                                            with col_mod_input:
-                                                # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
-                                                nouvelle_remise_val = st.number_input(
-                                                    label="Modif Remise",
-                                                    value=float(accord_existant['valeur']),
-                                                    step=0.5,
-                                                    format="%.2f",
-                                                    key=f"input_mod_{cle_unique}",
-                                                    label_visibility="collapsed" # On cache le label pour gagner de la place
-                                                )
-                                            
-                                            with col_mod_btn:
-                                                # Bouton de sauvegarde de la modification
-                                                if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val)
-                                                    st.rerun() # Rafraîchissement immédiat de la page
-                                        else:
-                                            # CAS B : NON, c'est libre.
-                                            # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
-                                            if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
+                                        with c_bt1:
+                                            # Gestion du bouton CONTRAT / VERROUILLER
+                                            if accord_existant and accord_existant['type'] == "CONTRAT":
+                                                st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
+                                                
+                                                col_mod_input, col_mod_btn = st.columns([2, 3])
+                                                with col_mod_input:
+                                                    nouvelle_remise_val = st.number_input(
+                                                        label="Modif Remise",
+                                                        value=float(accord_existant['valeur']),
+                                                        step=0.5,
+                                                        format="%.2f",
+                                                        key=f"input_mod_{cle_unique}",
+                                                        label_visibility="collapsed"
+                                                    )
+                                                with col_mod_btn:
+                                                    if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                                        sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val)
+                                                        st.rerun()
+                                            else:
+                                                if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
+                                                    sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
+                                                    st.rerun()
+                                        
+                                        with c_bt2:
+                                            # Gestion du bouton PROMO
+                                            if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                                sauvegarder_accord(article, "PROMO", 0)
                                                 st.rerun()
-                                    with c_bt2:
-                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            sauvegarder_accord(article, "PROMO", 0)
-                                            st.rerun()
-                                    with c_bt3:
-                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                            sauvegarder_accord(article, "ERREUR", 0)
-                                            st.rerun()
+                                        
+                                        with c_bt3:
+                                            # Gestion du bouton IGNORER
+                                            if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
+                                                sauvegarder_accord(article, "ERREUR", 0)
+                                                st.rerun()
+                                    # --- FIN DU BLOC CACHÉ ---
                                     # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
                                     
@@ -942,6 +945,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
