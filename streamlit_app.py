@@ -415,41 +415,34 @@ if session:
         
     if mode_pdf:
         st.info("💡 Astuce : Fermez la barre latérale (la croix ou la flèche 'build' en haut à gauche) pour avoir le tableau en pleine largeur avant d'imprimer.")
-        # --- PATCH LOUIS ULTIME : SORTIE DU FLUX POUR IMPRESSION ---
+        # --- PATCH PRINT : METHODE STATIC (Celle qui marche) ---
         st.markdown("""
             <style>
                 @media print {
-                    /* 1. On cache TOUT par défaut */
-                    body * {
-                        visibility: hidden;
-                    }
-
-                    /* 2. On rend visible uniquement le contenu principal */
-                    [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] * {
-                        visibility: visible;
-                    }
-
-                    /* 3. On force le conteneur principal à prendre toute la place physique */
+                    /* On force le conteneur principal à "lâcher" la hauteur */
                     [data-testid="stAppViewContainer"] {
-                        position: absolute !important;
-                        left: 0 !important;
-                        top: 0 !important;
-                        width: 100% !important;
-                        height: auto !important;
+                        position: static !important;
                         overflow: visible !important;
-                        z-index: 9999 !important;
+                        height: auto !important;
                         display: block !important;
                     }
-
-                    /* 4. On écrase les marges internes qui bloquent */
-                    [data-testid="stHeader"], [data-testid="stSidebar"], footer {
+                    
+                    /* On force le contenu interne à suivre */
+                    [data-testid="stMain"], .main, .block-container {
+                        height: auto !important;
+                        overflow: visible !important;
+                        display: block !important;
+                    }
+                    
+                    /* On cache tout ce qui gêne */
+                    [data-testid="stSidebar"], [data-testid="stHeader"], header, footer, .stDeployButton {
                         display: none !important;
                     }
                     
-                    /* 5. Ajustement fin pour que le tableau ne soit pas coupé */
+                    /* On ajuste les marges pour le papier A4 */
                     .block-container {
+                        padding: 0 !important;
                         max-width: 100% !important;
-                        padding: 1rem !important;
                     }
                 }
             </style>
@@ -996,6 +989,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
