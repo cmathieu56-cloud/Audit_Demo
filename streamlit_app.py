@@ -415,7 +415,37 @@ if session:
         
     if mode_pdf:
         st.info("💡 Astuce : Fermez la barre latérale (la croix ou la flèche 'build' en haut à gauche) pour avoir le tableau en pleine largeur avant d'imprimer.")
-
+        # --- PATCH LOUIS : FORCER L'IMPRESSION MULTI-PAGES ---
+        # Ce style CSS "casse" la fenêtre de scroll de Streamlit uniquement pour l'impression (Ctrl+P)
+        # pour que le navigateur voie tout le contenu et pas juste l'écran visible.
+        st.markdown("""
+            <style>
+                @media print {
+                    /* 1. On force tous les conteneurs à s'ouvrir complètement */
+                    html, body, [class*="ViewContainer"], [class*="main"], [class*="block-container"] {
+                        height: auto !important;
+                        overflow: visible !important;
+                        display: block !important;
+                    }
+                    
+                    /* 2. On cache tout ce qui gêne (Barre latérale, entête, pied de page, boutons) */
+                    [data-testid="stSidebar"] { display: none !important; }
+                    header { display: none !important; }
+                    footer { display: none !important; }
+                    .stDeployButton { display: none !important; }
+                    
+                    /* 3. On ajuste les marges pour que ça rentre bien */
+                    .block-container {
+                        padding-top: 0 !important;
+                        padding-bottom: 0 !important;
+                        padding-left: 1rem !important;
+                        padding-right: 1rem !important;
+                        max-width: 100% !important;
+                    }
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        # -----------------------------------------------------
     # --------------------------------------------------------
 
     tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
@@ -959,6 +989,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
