@@ -817,12 +817,12 @@ if session:
                                     # On crée une clé unique pour les boutons
                                     cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
 
-                                    # Louis : Si on est en MODE PDF, on saute l'affichage des boutons
+                                    # Louis : Si on est en MODE PDF, on saute TOUT l'affichage des boutons (et des colonnes)
                                     if not mode_pdf:
                                         # 1. On interroge le registre
                                         accord_existant = registre.get(article)
 
-                                        # On prépare les 3 colonnes pour les boutons
+                                        # 2. On crée les colonnes UNIQUEMENT si on n'est pas en PDF
                                         c_bt1, c_bt2, c_bt3 = st.columns(3)
 
                                         with c_bt1:
@@ -859,7 +859,14 @@ if session:
                                             if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                                 sauvegarder_accord(article, "ERREUR", 0)
                                                 st.rerun()
-# --- FIN DU BLOC A COPIER/COLLER ---
+                                    
+                                    # OPTIONNEL : Si tu veux quand même voir "Contrat Actif" sur le PDF (sans les boutons)
+                                    elif mode_pdf:
+                                        accord_existant = registre.get(article)
+                                        if accord_existant and accord_existant['type'] == "CONTRAT":
+                                            st.caption(f"🔒 Contrat actif : {accord_existant['valeur']}%")
+                                        elif accord_existant and accord_existant['type'] == "PROMO":
+                                            st.caption(f"🎁 Promo identifiée")
 
 # LIGNE DE REPÈRE APRÈS :
                                     # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
@@ -933,6 +940,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
