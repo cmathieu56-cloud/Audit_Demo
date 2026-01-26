@@ -810,18 +810,14 @@ if session:
                                     except:
                                         txt_prix_cible = ""
 
+                                    # LIGNE DE REPÈRE AVANT :
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
                                     
-                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
-                                    c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                    # On crée une clé unique en combinant Fournisseur + Article
-                                    # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
-                                    cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
-                                    # Louis : Si on est en MODE PDF, on saute l'affichage des boutons
-                                    # On crée une clé unique en combinant Fournisseur + Article
+# --- DEBUT DU BLOC A COPIER/COLLER (REMPLACE LES ANCIENS BOUTONS) ---
+                                    # On crée une clé unique pour les boutons
                                     cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
 
-                                    # --- MODIFICATION LOUIS : ON CACHE LES BOUTONS EN MODE PDF ---
+                                    # Louis : Si on est en MODE PDF, on saute l'affichage des boutons
                                     if not mode_pdf:
                                         # 1. On interroge le registre
                                         accord_existant = registre.get(article)
@@ -863,10 +859,10 @@ if session:
                                             if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                                 sauvegarder_accord(article, "ERREUR", 0)
                                                 st.rerun()
-                                    # --- FIN DE LA ZONE CACHÉE EN PDF ---
+# --- FIN DU BLOC A COPIER/COLLER ---
 
+# LIGNE DE REPÈRE APRÈS :
                                     # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
-                                    # (Cette partie reste EN DEHORS du if, donc toujours visible)
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
                     
 
@@ -937,6 +933,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
