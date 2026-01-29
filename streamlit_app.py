@@ -654,15 +654,14 @@ if session:
                         m = ref_map[art]
 
                         # --- SECURITE ANTI-BUG PROMO (ACTIVATION) ---
-                        # Si on n'a que de la promo en historique (Reference_Fiable = False), on ne calcule pas de perte
+                        # Si on n'a que de la promo en historique, on ne calcule pas de perte
                         if not m.get('Reference_Fiable', True):
                              perte = 0
                              motif = "Historique 100% Promo (Attente prochain achat standard)"
                         
                         # Sinon on lance le calcul normal...
                         elif True:
-
-                        # --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
+                            # --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
                             # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
                             # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
                             # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
@@ -1008,6 +1007,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
