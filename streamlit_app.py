@@ -517,14 +517,30 @@ if session:
                     valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
                     valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True)
                     
-                    # Gestion du cas PROMO : on ignore le record n°1
-                    idx_r, idx_p = 0, 0
-                    if accord and accord['type'] == "PROMO":
-                        if len(valid_remises) > 1: idx_r = 1
-                        if len(valid_prices) > 1: idx_p = 1
-                    
-                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0]
-                    best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
+                    # --- GESTION INTELLIGENTE "PROMO" (EXCLUSION TOTALE) ---
+                    # Par défaut, on prend le meilleur record
+                    best_r_row = valid_remises.iloc[0] if not valid_remises.empty else group.iloc[0]
+                    best_p_row = valid_prices.iloc[0] if not valid_prices.empty else group.iloc[0]
+
+                    # Si MARCEL a dit "C'est une Promo", on disqualifie le record actuel
+                    if accord and accord['type'] == "PROMO" and not valid_remises.empty:
+                        # 1. On identifie le taux "Promo" (le plus haut) qu'on veut bannir
+                        taux_promo_banni = valid_remises.iloc[0]['Remise_Val']
+                        
+                        # 2. On filtre l'historique pour ne garder que ce qui est STRICTEMENT INFÉRIEUR
+                        # Louis : On cherche la "Vraie Vie", pas le one-shot à 64%
+                        df_hors_promo = valid_remises[valid_remises['Remise_Val'] < taux_promo_banni]
+                        
+                        if not df_hors_promo.empty:
+                            # Bingo : On a trouvé des factures "normales" en dessous
+                            best_r_row = df_hors_promo.iloc[0]
+                            # Pour le prix, on reste cohérent : on prend le meilleur prix PARMI ces factures normales
+                            best_p_row = df_hors_promo.sort_values('PU_Systeme', ascending=True).iloc[0]
+                        else:
+                            # Cas rare : On n'a QUE de la promo dans l'historique (ex: 2 achats, 2 promos)
+                            # On est obligé de garder la promo faute de mieux, mais ça se régulera au prochain achat "normal"
+                            pass 
+                    # -------------------------------------------------------
 
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
                     remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
@@ -963,6 +979,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
