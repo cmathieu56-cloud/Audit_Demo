@@ -23,24 +23,42 @@ try:
 except Exception as e:
     st.error(f"Erreur connexion : {e}")
 
-REGISTRE_FILE = "registre_accords.json"
+# --- VERSION SUPABASE (CLOUD) ---
+# On vire REGISTRE_FILE, on passe en direct sur la base.
 
 def charger_registre():
-    if os.path.exists(REGISTRE_FILE):
-        with open(REGISTRE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    """Charge les accords directement depuis Supabase"""
+    try:
+        # On récupère tout le contenu de la table
+        response = supabase.table("accords_commerciaux").select("*").execute()
+        registre = {}
+        # On convertit le format Supabase en format Dictionnaire pour le script
+        for row in response.data:
+            registre[row['article']] = {
+                "type": row['type_accord'], 
+                "valeur": row['valeur'],
+                "date": row['date_maj']
+            }
+        return registre
+    except Exception as e:
+        return {}
 
-def sauvegarder_accord(article, type_accord, valeur):
-    registre = charger_registre()
-    registre[article] = {
-        "type": type_accord, 
-        "valeur": valeur,
-        "date": datetime.now().strftime("%Y-%m-%d")
-    }
-    with open(REGISTRE_FILE, "w", encoding="utf-8") as f:
-        json.dump(registre, f, indent=4)
-# ==============================================================================
+def sauvegarder_accord(article, type_accord, valeur, user_id="Système"):
+    """Enregistre ou met à jour un accord dans Supabase"""
+    try:
+        data_to_save = {
+            "article": article,
+            "type_accord": type_accord,
+            "valeur": valeur,
+            "date_maj": datetime.now().strftime("%Y-%m-%d"),
+            "modifie_par": str(user_id)
+        }
+        # Upsert = Si existe maj, sinon crée
+        supabase.table("accords_commerciaux").upsert(data_to_save).execute()
+        return True
+    except Exception as e:
+        st.error(f"Erreur sauvegarde Cloud : {e}")
+        return False# ==============================================================================
 # 2. LOGIQUE MÉTIER
 # ==============================================================================
 
@@ -979,6 +997,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
