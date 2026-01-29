@@ -662,37 +662,37 @@ if session:
                         # Sinon on lance le calcul normal...
                         elif True:
 
-# --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
-                        # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
-                        # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
-                        # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
-                        prix_historique_ref = m['Price_At_Best_Remise']
-                        
-                        # REGLE 1 : SECURITE ABSOLUE (Berner)
-                        # Si on paye le prix record ou moins, perte = 0
-                        if pu_paye <= m['Best_Price_Net'] + 0.05:
-                            perte = 0
-                        
-                        # REGLE 2 : RESPECT DE LA REMISE (Thermor)
-                        elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
-                            perte = 0
+                        # --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
+                            # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
+                            # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
+                            # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
+                            prix_historique_ref = m['Price_At_Best_Remise']
                             
-                        # REGLE 3 : CALCUL DE LA PERTE
-                        else:
-                            # On cherche la meilleure cible possible entre le prix record et la remise théorique
-                            cible_remise = 999999.0
-                            if m['Best_Brut_Associe'] > 0:
-                                cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
-                                if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
-                                    cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
+                            # REGLE 1 : SECURITE ABSOLUE (Berner)
+                            # Si on paye le prix record ou moins, perte = 0
+                            if pu_paye <= m['Best_Price_Net'] + 0.05:
+                                perte = 0
                             
-                            cible = min(m['Best_Price_Net'], cible_remise)
-                            
-                            if pu_paye > cible + 0.05:
-                                perte = (pu_paye - cible) * row['Quantité']
-                                motif = "Hausse de prix"
-                                source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
-                                remise_cible_str = f"{m['Best_Remise']:g}%"
+                            # REGLE 2 : RESPECT DE LA REMISE (Thermor)
+                            elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
+                                perte = 0
+                                
+                            # REGLE 3 : CALCUL DE LA PERTE
+                            else:
+                                # On cherche la meilleure cible possible entre le prix record et la remise théorique
+                                cible_remise = 999999.0
+                                if m['Best_Brut_Associe'] > 0:
+                                    cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
+                                    if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
+                                        cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
+                                
+                                cible = min(m['Best_Price_Net'], cible_remise)
+                                
+                                if pu_paye > cible + 0.05:
+                                    perte = (pu_paye - cible) * row['Quantité']
+                                    motif = "Hausse de prix"
+                                    source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
+                                    remise_cible_str = f"{m['Best_Remise']:g}%"
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -1008,6 +1008,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
