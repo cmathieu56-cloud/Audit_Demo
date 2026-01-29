@@ -691,22 +691,6 @@ if session:
             
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
-
-                # --- OPTION D'AFFICHAGE : FILTRER PAR FACTURE ---
-                st.divider()
-                # On récupère la liste des fichiers qui contiennent des erreurs
-                liste_fichiers_avec_erreurs = sorted(df_ano['Fichier_Source'].unique().tolist(), reverse=True)
-                
-                choix_affichage = st.selectbox(
-                    "👁️ Filtrer les erreurs par facture :", 
-                    ["TOUT LE DOSSIER (GLOBAL)"] + liste_fichiers_avec_erreurs
-                )
-                
-                # Si on choisit un fichier précis, on masque les autres lignes du tableau de résultat
-                if choix_affichage != "TOUT LE DOSSIER (GLOBAL)":
-                    df_ano = df_ano[df_ano['Fichier_Source'] == choix_affichage]
-                # ------------------------------------------------
-
                 total_perte = df_ano['Perte'].sum()
                 # --- BLOC PODIUM : MONTANT + % ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
@@ -979,6 +963,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
