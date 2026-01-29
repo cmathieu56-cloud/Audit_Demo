@@ -788,6 +788,16 @@ if session:
                 st.markdown(html_podium, unsafe_allow_html=True)
                 
                 st.divider()
+                # --- FILTRE AFFICHAGE (POUR LE FREROT) ---
+                # Explication : On récupère la liste de toutes les factures qui ont des soucis
+                # et on propose à l'utilisateur de choisir s'il veut tout voir ou juste une facture.
+                liste_fichiers_avec_erreurs = sorted(df_ano['Fichier_Source'].unique().tolist(), reverse=True)
+                
+                choix_affichage = st.selectbox(
+                    "👁️ Filtrer les détails ci-dessous par facture :", 
+                    ["TOUT LE DOSSIER (GLOBAL)"] + liste_fichiers_avec_erreurs
+                )
+                # -----------------------------------------
                 st.subheader("🕵️ Détails par Fournisseur")
         
                 # 6. Détails
@@ -800,7 +810,18 @@ if session:
                     
                     with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=False):
                         df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
+                        # --- FILTRE ACTIF (POUR LE FREROT) ---
+                        # Si l'utilisateur a choisi une facture précise dans le menu du dessus,
+                        # on ne garde QUE les lignes de cette facture.
+                        if choix_affichage != "TOUT LE DOSSIER (GLOBAL)":
+                            df_litiges_fourn = df_litiges_fourn[df_litiges_fourn['Fichier_Source'] == choix_affichage]
                         
+                        # Si après le filtre le tableau est vide (ex: ce fournisseur n'a pas d'erreur sur cette facture),
+                        # on affiche un petit message et on passe au suivant.
+                        if df_litiges_fourn.empty:
+                            st.info(f"✅ Aucune erreur sur la facture {choix_affichage} pour ce fournisseur.")
+                            continue
+                        # -------------------------------------
                         for article, group in df_litiges_fourn.groupby('Ref'):
                                     # On ne récupère plus le prix_ref pour l'affichage
                                     date_ref = group['Source Cible'].iloc[0]
@@ -958,6 +979,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
