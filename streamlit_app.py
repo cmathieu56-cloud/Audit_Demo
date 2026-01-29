@@ -892,25 +892,25 @@ if session:
                                                     label_visibility="collapsed" # On cache le label pour gagner de la place
                                                 )
                                             
-                                            with col_mod_btn:
+                                            with col_mod_btn:                                              
                                                 # Bouton de sauvegarde de la modification
-                                                if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val)
-                                                    st.rerun() # Rafraîchissement immédiat de la page
-                                        else:
-                                            # CAS B : NON, c'est libre.
-                                            # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
-                                            if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
-                                                st.rerun()
-                                    with c_bt2:
-                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            sauvegarder_accord(article, "PROMO", 0)
-                                            st.rerun()
-                                    with c_bt3:
-                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                            sauvegarder_accord(article, "ERREUR", 0)
-                                            st.rerun()
+                                                                    if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                                                        sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, user_id)
+                                                                        st.rerun() # Rafraîchissement immédiat de la page
+                                                            else:
+                                                                # CAS B : NON, c'est libre.
+                                                                # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
+                                                                if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
+                                                                    sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), user_id)
+                                                                    st.rerun()
+                                                    with c_bt2:
+                                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                                            sauvegarder_accord(article, "PROMO", 0, user_id)
+                                                            st.rerun()
+                                                    with c_bt3:
+                                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
+                                                            sauvegarder_accord(article, "ERREUR", 0, user_id)
+                                                            st.rerun()
                                     # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
                                     
@@ -997,6 +997,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
