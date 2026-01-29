@@ -539,6 +539,8 @@ if session:
                     # Par défaut, on prend le meilleur record
                     best_r_row = valid_remises.iloc[0] if not valid_remises.empty else group.iloc[0]
                     best_p_row = valid_prices.iloc[0] if not valid_prices.empty else group.iloc[0]
+                    
+                    reference_fiable = True # <-- On ajoute cette sécurité (Louis : par défaut c'est fiable)
 
                     # Si MARCEL a dit "C'est une Promo", on disqualifie le record actuel
                     if accord and accord['type'] == "PROMO" and not valid_remises.empty:
@@ -550,18 +552,20 @@ if session:
                         df_hors_promo = valid_remises[valid_remises['Remise_Val'] < taux_promo_banni]
                         
                         if not df_hors_promo.empty:
-                            # Bingo : On a trouvé des factures "normales" en dessous
                             best_r_row = df_hors_promo.iloc[0]
                             # Pour le prix, on reste cohérent : on prend le meilleur prix PARMI ces factures normales
                             best_p_row = df_hors_promo.sort_values('PU_Systeme', ascending=True).iloc[0]
                         else:
-                            # Cas rare : On n'a QUE de la promo dans l'historique (ex: 2 achats, 2 promos)
-                            # On est obligé de garder la promo faute de mieux, mais ça se régulera au prochain achat "normal"
-                            pass 
+                            # Cas rare : On n'a QUE de la promo dans l'historique
+                            # On signale que la ref n'est pas fiable pour ne pas afficher d'erreur.
+                            reference_fiable = False 
                     # -------------------------------------------------------
 
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
                     remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
+                    
+                    # Sécurité : Si historique vide (que de la promo), on force 0 pour ne pas créer de fausse dette
+                    if not reference_fiable: remise_finale = 0
 
                     # --- CORRECTION LOGIQUE "PRIX NET" vs "PRIX BRUT" ---
                     # Si le meilleur prix est un "Net" (0 remise) et qu'il est meilleur que le prix remisé habituel
@@ -583,9 +587,10 @@ if session:
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
-                        'Date_Price': best_p_row['Date']
+                        'Date_Price': best_p_row['Date'],
+                        'Reference_Fiable': reference_fiable # <-- Ajout ici pour le transmettre au calcul
                     }
-
+                
                     # --- MODIFICATION : ON COMMENTE TOUT POUR ARRETER LE LAG ---
                     # if remise_finale > 0:
                     #     try:
@@ -647,6 +652,15 @@ if session:
                     
                     if art in ref_map and art != 'SANS_REF':
                         m = ref_map[art]
+
+                        # --- SECURITE ANTI-BUG PROMO (ACTIVATION) ---
+                        # Si on n'a que de la promo en historique (Reference_Fiable = False), on ne calcule pas de perte
+                        if not m.get('Reference_Fiable', True):
+                             perte = 0
+                             motif = "Historique 100% Promo (Attente prochain achat standard)"
+                        
+                        # Sinon on lance le calcul normal...
+                        elif True:
 
 # --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
                         # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
@@ -860,74 +874,71 @@ if session:
                                         txt_prix_cible = ""
 
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
-                                    
-                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
-                                    c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                    # On crée une clé unique en combinant Fournisseur + Article
-                                    # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
-                                    cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
-                                    
-                                    with c_bt1:
+                                
+                                # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
+                                c_bt1, c_bt2, c_bt3 = st.columns(3)
+                                # On crée une clé unique en combinant Fournisseur + Article pour éviter les doublons d'ID Streamlit
+                                cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
+                                
+                                with c_bt1:
+                                    # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
+                                    accord_existant = registre.get(article)
 
-# --- REMPLACEMENT AVEC COMMENTAIRES POUR LOUIS ---
-                                        # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
-                                        accord_existant = registre.get(article)
+                                    if accord_existant and accord_existant['type'] == "CONTRAT":
+                                        # CAS A : OUI, un contrat est déjà verrouillé.
+                                        st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
+                                        
+                                        col_mod_input, col_mod_btn = st.columns([2, 3])
+                                        
+                                        with col_mod_input:
+                                            # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
+                                            nouvelle_remise_val = st.number_input(
+                                                label="Modif Remise",
+                                                value=float(accord_existant['valeur']),
+                                                step=0.5,
+                                                format="%.2f",
+                                                key=f"input_mod_{cle_unique}",
+                                                label_visibility="collapsed"
+                                            )
+                                        
+                                        with col_mod_btn:
+                                            if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                                sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, user_id)
+                                                st.rerun()
+                                    else:
+                                        # CAS B : NON, c'est libre.
+                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
+                                            val_clean = clean_float(str(remise_ref).replace('%',''))
+                                            sauvegarder_accord(article, "CONTRAT", val_clean, user_id)
+                                            st.rerun()
 
-                                        if accord_existant and accord_existant['type'] == "CONTRAT":
-                                            # CAS A : OUI, un contrat est déjà verrouillé.
-                                            # -> On affiche la valeur figée et l'interface pour la modifier (Input + Bouton)
-                                            st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
-                                            
-                                            # On découpe la colonne en 2 : une petite pour saisir, une grande pour valider
-                                            col_mod_input, col_mod_btn = st.columns([2, 3])
-                                            
-                                            with col_mod_input:
-                                                # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
-                                                nouvelle_remise_val = st.number_input(
-                                                    label="Modif Remise",
-                                                    value=float(accord_existant['valeur']),
-                                                    step=0.5,
-                                                    format="%.2f",
-                                                    key=f"input_mod_{cle_unique}",
-                                                    label_visibility="collapsed" # On cache le label pour gagner de la place
-                                                )
-                                            
-                                            with col_mod_btn:                                              
-                                                # Bouton de sauvegarde de la modification
-                                                                    if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                                        sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, user_id)
-                                                                        st.rerun() # Rafraîchissement immédiat de la page
-                                                            else:
-                                                                # CAS B : NON, c'est libre.
-                                                                # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
-                                                                if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                                    sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), user_id)
-                                                                    st.rerun()
-                                                    with c_bt2:
-                                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                                            sauvegarder_accord(article, "PROMO", 0, user_id)
-                                                            st.rerun()
-                                                    with c_bt3:
-                                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                                            sauvegarder_accord(article, "ERREUR", 0, user_id)
-                                                            st.rerun()
-                                    # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
-                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
-                                    
-                                    html_detail = (
-                                        sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
-                                        .set_properties(**{
-                                            'text-align': 'center', 'border': '1px solid black', 'color': 'black'
-                                        })
-                                        .set_table_styles([
-                                            {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
-                                            {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
-                                        ])
-                                        .hide(axis="index")
-                                        .to_html()
-                                    )
-                                    
-                                    st.markdown(html_detail, unsafe_allow_html=True)
+                                with c_bt2:
+                                    if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                        sauvegarder_accord(article, "PROMO", 0, user_id)
+                                        st.rerun()
+
+                                with c_bt3:
+                                    if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
+                                        sauvegarder_accord(article, "ERREUR", 0, user_id)
+                                        st.rerun()
+
+                                # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
+                                sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
+                                
+                                html_detail = (
+                                    sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
+                                    .set_properties(**{
+                                        'text-align': 'center', 'border': '1px solid black', 'color': 'black'
+                                    })
+                                    .set_table_styles([
+                                        {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
+                                        {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
+                                    ])
+                                    .hide(axis="index")
+                                    .to_html()
+                                )
+                                
+                                st.markdown(html_detail, unsafe_allow_html=True)
                     
 
     with tab_import:
@@ -997,6 +1008,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
