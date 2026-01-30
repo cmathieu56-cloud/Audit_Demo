@@ -300,10 +300,16 @@ if session:
     st.title("🏗️ Audit V21 - Logique Universelle")
 
     try:
+        # Louis : On interroge Supabase pour récupérer tes factures
         res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
+        # Louis : On prépare les données pour l'affichage (ne pas supprimer ces deux lignes !)
         memoire_full = {r['file_name']: r for r in res_db.data}
         memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
     except Exception as e: 
+        # Louis : Si ton badge de sécurité a expiré (erreur JWT), on vide tout et on te reconnecte
+        if "JWT expired" in str(e):
+            st.session_state.clear()
+            st.rerun()
         st.error(f"Erreur chargement base : {e}")
         memoire = {}
         memoire_full = {}
@@ -983,6 +989,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
