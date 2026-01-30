@@ -21,8 +21,11 @@ try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
-    def charger_registre():
-    """Louis : On récupère maintenant TOUTE l'identité de l'article depuis Supabase"""
+    # Louis : On remet l'alerte ici. Si la connexion échoue, on affiche l'erreur en rouge.
+    st.error(f"Erreur connexion : {e}") 
+
+def charger_registre():
+    """Louis : Cette fonction interroge Supabase pour récupérer l'identité complète des articles déjà enregistrés"""
     try:
         res = supabase.table("accords_commerciaux").select("*").execute()
         # On stocke l'identité complète : type, valeur, unité, désignation, fournisseur et marque
@@ -994,6 +997,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
