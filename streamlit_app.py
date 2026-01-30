@@ -588,13 +588,50 @@ if session:
                             remise_finale = round(taux_virtuel, 2)
                     # ----------------------------------------------------
 
+                    # LOUIS : Détection des prix sans remise suspects
+                    # On récupère toutes les lignes SANS remise (prix forcés)
+                    lignes_sans_remise = group[group['Remise_Val'] == 0]
+                    
+                    # Variable pour stocker les alertes
+                    alerte_prix_force = None
+                    derniere_commande_mois = 0
+                    
+                    if not lignes_sans_remise.empty:
+                        # On prend le meilleur prix sans remise
+                        meilleur_prix_force = lignes_sans_remise['PU_Systeme'].min()
+                        date_prix_force = lignes_sans_remise[lignes_sans_remise['PU_Systeme'] == meilleur_prix_force]['Date'].iloc[0]
+                        
+                        # RÈGLE 1 : Si le prix forcé est MEILLEUR que le prix avec remise → Promo légitime
+                        if meilleur_prix_force < best_p_row['PU_Systeme'] - 0.10:
+                            alerte_prix_force = "PROMO_OK"
+                        
+                        # RÈGLE 2 : Si le prix forcé est PIRE → Arnaque
+                        elif meilleur_prix_force > best_p_row['PU_Systeme'] + 0.10:
+                            alerte_prix_force = "SUSPECT"
+                        
+                        # RÈGLE 3 : Ancienne référence (> 12 mois)
+                        try:
+                            from datetime import datetime
+                            date_derniere = pd.to_datetime(group['Date']).max()
+                            date_actuelle = datetime.now()
+                            delta_mois = (date_actuelle.year - date_derniere.year) * 12 + (date_actuelle.month - date_derniere.month)
+                            derniere_commande_mois = delta_mois
+                            
+                            if delta_mois > 12 and meilleur_prix_force > 0:
+                                if alerte_prix_force != "SUSPECT":  # Pas de double alerte
+                                    alerte_prix_force = "ANCIEN"
+                        except:
+                            pass
+                    
                     ref_map[art] = {
                         'Best_Remise': remise_finale,
                         'Best_Brut_Associe': clean_float(best_r_row['Prix Brut']),
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
-                        'Date_Price': best_p_row['Date']
+                        'Date_Price': best_p_row['Date'],
+                        'Alerte_Prix_Force': alerte_prix_force,
+                        'Derniere_Commande_Mois': derniere_commande_mois
                     }
 
                     # --- MODIFICATION : ON COMMENTE TOUT POUR ARRETER LE LAG ---
@@ -1062,6 +1099,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
