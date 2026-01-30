@@ -523,7 +523,7 @@ if session:
                 df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
                 
                 for art, group in df_clean.groupby('Article'):
-                    # On vérifie si Marcel a déjà pris une décision sur cet article
+                    # On vérifie si on a déjà pris une décision sur cet article
                     accord = registre.get(art)
                     
                     # Logique de sélection des records
@@ -848,7 +848,7 @@ if session:
 
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
                                     
-                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
+                                    # --- INTERFACE D'ARBITRAGE (CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
                                     # On crée une clé unique en combinant Fournisseur + Article
                                     # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
@@ -989,6 +989,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
