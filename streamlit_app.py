@@ -537,7 +537,7 @@ if session:
                             valid_remises = valid_remises[abs(valid_remises['PU_Systeme'] - prix_promo) > 0.10]
                     # -------------------------
 
-best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0] # <--- LIGNE DE REPERE APRES
+                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0] # <--- LIGNE DE REPERE APRES
                     best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
 
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
@@ -977,6 +977,7 @@ best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.ilo
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
