@@ -671,7 +671,7 @@ if session:
                                         cible = prix_contractuel
                                         motif = f"Remise {remise_actuelle}% < Contrat {remise_contractuelle}%"
                                         remise_cible_str = f"{remise_contractuelle}%"
-                                        detail_tech = f"(Contrat Marcel du {accord['date']})"
+                                        detail_tech = f"(Contrat du {accord['date']})"
                                         prix_historique_ref = cible
                         
                         elif accord and accord['type'] == "PROMO":
@@ -1062,6 +1062,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
