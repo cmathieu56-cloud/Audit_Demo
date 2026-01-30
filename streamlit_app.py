@@ -146,6 +146,17 @@ def detecter_famille(label, ref=""):
     
     return "AUTRE_PRODUIT"
 
+def detecter_famille_cuivre(article, designation):
+    """Identifie si un article contient du cuivre (prix variable)."""
+    label_up = str(designation).upper()
+    ref_up = str(article).upper()
+    
+    keywords_cuivre = [
+        "CABLE", "U1000", "R2V", "H07", "FIL", "COURONNE", 
+        "TOURET", "ICTA", "XVB", "RO2V", "CUIVRE"
+    ]
+    
+    return any(kw in label_up or kw in ref_up for kw in keywords_cuivre)
 
 def extraire_json_robuste(texte):
     try:
@@ -648,24 +659,15 @@ if session:
                     if art in ref_map and art != 'SANS_REF':
                         m = ref_map[art]
 
-# --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
-                        # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
-                        # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
-                        # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
                         prix_historique_ref = m['Price_At_Best_Remise']
                         
-                        # REGLE 1 : SECURITE ABSOLUE (Berner)
-                        # Si on paye le prix record ou moins, perte = 0
                         if pu_paye <= m['Best_Price_Net'] + 0.05:
                             perte = 0
                         
-                        # REGLE 2 : RESPECT DE LA REMISE (Thermor)
                         elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
                             perte = 0
                             
-                        # REGLE 3 : CALCUL DE LA PERTE
                         else:
-                            # On cherche la meilleure cible possible entre le prix record et la remise théorique
                             cible_remise = 999999.0
                             if m['Best_Brut_Associe'] > 0:
                                 cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
@@ -679,6 +681,88 @@ if session:
                                 motif = "Hausse de prix"
                                 source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
                                 remise_cible_str = f"{m['Best_Remise']:g}%"
+
+                else:
+                    art = row['Article']
+                    remise_actuelle = clean_float(str(row['Remise']).replace('%', ''))
+                    pu_paye = row['PU_Systeme']
+                    brut_actuel = clean_float(row['Prix Brut'])
+                    
+                    if art in ref_map and art != 'SANS_REF':
+                        m = ref_map[art]
+                        accord = registre.get(art)
+                        
+                        if accord and accord['type'] == "CONTRAT":
+                            remise_contractuelle = accord['valeur']
+                            if remise_actuelle < remise_contractuelle - 0.5:
+                                if brut_actuel > 0:
+                                    prix_contractuel = brut_actuel * (1 - remise_contractuelle/100)
+                                    if pu_paye > prix_contractuel + 0.10:
+                                        perte = (pu_paye - prix_contractuel) * row['Quantité']
+                                        cible = prix_contractuel
+                                        motif = f"Remise {remise_actuelle}% < Contrat {remise_contractuelle}%"
+                                        remise_cible_str = f"{remise_contractuelle}%"
+                                        detail_tech = f"(Contrat Marcel du {accord['date']})"
+                        
+                        elif accord and accord['type'] == "PROMO":
+                            perte = 0
+                        
+                        elif fourn == "YESSS ELECTRIQUE":
+                            is_cuivre = detecter_famille_cuivre(art, row['Désignation'])
+                            remise_historique = m['Best_Remise']
+                            
+                            if remise_actuelle < remise_historique - 0.5:
+                                prix_attendu = brut_actuel * (1 - remise_historique/100)
+                                
+                                if pu_paye > prix_attendu + 0.05:
+                                    perte = (pu_paye - prix_attendu) * row['Quantité']
+                                    cible = prix_attendu
+                                    motif = f"Remise baissée ({remise_actuelle}% au lieu de {remise_historique}%)"
+                                    remise_cible_str = f"{remise_historique}%"
+                                    
+                                    if is_cuivre:
+                                        detail_tech = f"(CUIVRE : Brut {brut_actuel:.2f}€, variation normale)"
+                                    else:
+                                        detail_tech = f"(Brut {brut_actuel:.2f}€)"
+                            
+                            if not is_cuivre and perte == 0:
+                                brut_historique = m['Best_Brut_Associe']
+                                
+                                if brut_actuel > brut_historique * 1.03:
+                                    prix_attendu = brut_historique * (1 - remise_actuelle/100)
+                                    
+                                    if pu_paye > prix_attendu + 0.05:
+                                        perte = (pu_paye - prix_attendu) * row['Quantité']
+                                        cible = prix_attendu
+                                        
+                                        hausse_brut_pct = ((brut_actuel / brut_historique) - 1) * 100
+                                        motif = f"Brut augmenté de {hausse_brut_pct:.1f}% (Produit stable, pas de cuivre)"
+                                        remise_cible_str = f"{remise_actuelle}%"
+                                        detail_tech = f"(Brut historique : {brut_historique:.2f}€ → Actuel : {brut_actuel:.2f}€)"
+                        
+                        else:
+                            prix_historique_ref = m['Price_At_Best_Remise']
+                            
+                            if pu_paye <= m['Best_Price_Net'] + 0.05:
+                                perte = 0
+                            
+                            elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
+                                perte = 0
+                                
+                            else:
+                                cible_remise = 999999.0
+                                if m['Best_Brut_Associe'] > 0:
+                                    cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
+                                    if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
+                                        cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
+                                
+                                cible = min(m['Best_Price_Net'], cible_remise)
+                                
+                                if pu_paye > cible + 0.05:
+                                    perte = (pu_paye - cible) * row['Quantité']
+                                    motif = "Hausse de prix"
+                                    source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
+                                    remise_cible_str = f"{m['Best_Remise']:g}%"
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -1000,6 +1084,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
