@@ -24,23 +24,24 @@ except Exception as e:
     st.error(f"Erreur connexion : {e}") 
 
 def charger_registre():
-    """Louis : Cette fonction interroge Supabase pour récupérer toutes les promos ou contrats déjà signés."""
+    """Louis : On récupère l'accord, sa valeur et son unité (EUR ou %) depuis Supabase"""
     try:
-        # On lit la table SQL 'accords_commerciaux' au lieu du fichier JSON
+        # On lit la table SQL 'accords_commerciaux'
         res = supabase.table("accords_commerciaux").select("*").execute()
-        # On transforme le tout en dictionnaire pour que l'IA puisse comparer les prix plus tard
-        return {r['article']: {'type': r['type_accord'], 'valeur': r['valeur'], 'date': r['date_maj']} for r in res.data}
+        # On stocke maintenant l'unité dans le dictionnaire pour que l'IA sache quoi comparer
+        return {r['article']: {'type': r['type_accord'], 'valeur': r['valeur'], 'unite': r['unite'], 'date': r['date_maj']} for r in res.data}
     except:
         return {}
 
-def sauvegarder_accord(article, type_accord, valeur):
-    """Louis : Ici on enregistre ta décision (quand tu cliques sur un bouton) directement dans la base de données."""
+def sauvegarder_accord(article, type_accord, valeur, unite="EUR"):
+    """Louis : On enregistre la valeur ET l'unité (EUR ou %) pour ne plus faire de calculs à la toto"""
     try:
-        # On utilise 'upsert' : ça crée la ligne si elle n'existe pas, ou ça la met à jour si elle existe déjà
+        # On utilise 'upsert' pour mettre à jour la ligne avec la nouvelle colonne 'unite'
         supabase.table("accords_commerciaux").upsert({
             "article": article,
             "type_accord": type_accord,
             "valeur": valeur,
+            "unite": unite,
             "date_maj": datetime.now().strftime("%Y-%m-%d"),
             "modifie_par": "Système"
         }).execute()
@@ -883,10 +884,35 @@ if session:
                                             if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
                                                 sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
                                                 st.rerun()
-                                    with c_bt2:
+                                    with c_bt2: # <--- LIGNE DE REPERE AVANT
+                                        # Louis : On définit si on stocke une remise ou un prix net.
+                                        # Si la remise cible existe (ex: 64.34%), on la prend. 
+                                        # Sinon, on prend le prix historique (ex: 115€).
+                                        val_promo_sql = clean_float(remise_ref.replace('%',''))
+                                        unite_promo_sql = "%"
+                                        
+                                        if val_promo_sql <= 0:
+                                            val_promo_sql = val_hist
+                                            unite_promo_sql = "EUR"
+
                                         if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            sauvegarder_accord(article, "PROMO", 0)
-                                            st.rerun()
+                                            # On sauvegarde avec la bonne unité détectée pour YESSS ou les autres
+                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql)
+                                            st.rerun()with c_bt2: # <--- LIGNE DE REPERE AVANT
+                                        # Louis : On définit si on stocke une remise ou un prix net.
+                                        # Si la remise cible existe (ex: 64.34%), on la prend. 
+                                        # Sinon, on prend le prix historique (ex: 115€).
+                                        val_promo_sql = clean_float(remise_ref.replace('%',''))
+                                        unite_promo_sql = "%"
+                                        
+                                        if val_promo_sql <= 0:
+                                            val_promo_sql = val_hist
+                                            unite_promo_sql = "EUR"
+
+                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                            # On sauvegarde avec la bonne unité détectée pour YESSS ou les autres
+                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql)
+                                            st.rerun())
                                     with c_bt3:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                             sauvegarder_accord(article, "ERREUR", 0)
@@ -977,6 +1003,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
