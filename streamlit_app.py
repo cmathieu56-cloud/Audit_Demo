@@ -15,21 +15,21 @@ from io import BytesIO
 # ==============================================================================
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"] # <--- LIGNE DE REPERE AVANT
 
 try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
-    # Louis : On affiche l'erreur si la liaison avec Supabase ou Gemini foire.
+    # Si la connexion échoue, on affiche l'alerte ici
     st.error(f"Erreur connexion : {e}") 
 
 def charger_registre():
-    """Louis : On récupère l'identité complète des articles (nom, fourn, marque) depuis SQL"""
+    """LOUIS : Cette fonction récupère tous les contrats et promos déjà enregistrés en base SQL"""
     try:
-        # On lit la table SQL 'accords_commerciaux'
+        # On interroge la table accords_commerciaux
         res = supabase.table("accords_commerciaux").select("*").execute()
-        # On crée un dictionnaire intelligent pour que l'IA puisse comparer plus tard
+        # On crée un dictionnaire qui contient l'identité complète (nom, fourn, marque)
         return {r['article']: {
             'type': r['type_accord'], 
             'valeur': r['valeur'], 
@@ -43,9 +43,9 @@ def charger_registre():
         return {}
 
 def sauvegarder_accord(article, type_accord, valeur, unite="EUR", designation="", fournisseur="", marque=""):
-    """Louis : Ici on enregistre ta décision (clic bouton) avec TOUTES les infos du produit"""
+    """LOUIS : Cette fonction enregistre tes clics (Promo/Contrat) dans les nouvelles colonnes SQL"""
     try:
-        # On remplit les nouvelles colonnes pour ne plus avoir une base de données anonyme
+        # On remplit les nouvelles colonnes fournisseur et désignation pour que la base soit lisible
         supabase.table("accords_commerciaux").upsert({
             "article": article,
             "type_accord": type_accord,
@@ -59,6 +59,7 @@ def sauvegarder_accord(article, type_accord, valeur, unite="EUR", designation=""
         }).execute()
     except Exception as e:
         st.error(f"Erreur sauvegarde Supabase : {e}")
+
 # ==============================================================================
 # 2. LOGIQUE MÉTIER
 # ==============================================================================
@@ -999,6 +1000,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
