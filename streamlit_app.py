@@ -897,7 +897,7 @@ if session:
                             continue
                         # -------------------------------------
                         
-                              for article, group in df_litiges_fourn.groupby('Ref'):
+                        for article, group in df_litiges_fourn.groupby('Ref'):
                                     # LOUIS : On récupère la date de référence pour l'affichage
                                     # Problème : Avec la nouvelle logique YESSS, la colonne "Source Cible" peut être vide ("-")
                                     # Solution : Si elle est vide, on prend la date de la facture à la place
@@ -905,7 +905,8 @@ if session:
                                     date_ref = source_brute if source_brute != "-" else group['Date Facture'].iloc[0]
                                     
                                     remise_ref = group['Remise Cible'].iloc[0]
-                                    nom_art = group['Désignation'].iloc[0]]
+                                    nom_art = group['Désignation'].iloc[0]
+]
 
 # --- CORRECTION FINALE TITRE (SPECIAL LOUIS) ---
                                     # Louis : Au lieu de faire un calcul (Prix * %), on lit juste la valeur qu'on a transportée.
@@ -1061,6 +1062,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
