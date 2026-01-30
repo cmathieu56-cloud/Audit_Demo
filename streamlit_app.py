@@ -959,7 +959,6 @@ if session:
                                     date_ref = source_brute if source_brute != "-" else group['Date Facture'].iloc[0]
                                     remise_ref = group['Remise Cible'].iloc[0]
                                     nom_art = group['Désignation'].iloc[0]
-                                    
                                     # LOUIS : Calcul des données pour le résumé visuel
                                     prix_min = group['Payé (U)'].min()
                                     prix_actuel = group['Payé (U)'].iloc[-1]
@@ -967,6 +966,14 @@ if session:
                                     date_actuel = group['Date Facture'].iloc[-1]
                                     ecart_euros = prix_actuel - prix_min
                                     ecart_pct = ((prix_actuel / prix_min) - 1) * 100 if prix_min > 0 else 0
+                                    
+                                    # LOUIS : Récupération des remises historique et actuelle
+                                    remise_min = group[group['Payé (U)'] == prix_min]['Remise'].iloc[0]
+                                    remise_actuelle = group['Remise'].iloc[-1]
+                                    
+                                    # Formatage des remises pour l'affichage
+                                    remise_min_txt = remise_min if remise_min != "-" else "0%"
+                                    remise_actuelle_txt = remise_actuelle if remise_actuelle != "-" else "0%"
                                     
                                     # LOUIS : Détection du type d'alerte
                                     badge_alerte = ""
@@ -989,19 +996,26 @@ if session:
                                     if badge_alerte:
                                         st.markdown(f"**{badge_alerte}**")
                                     
-                                    # LOUIS : Box résumé avec les prix
+                                    # LOUIS : Box résumé avec les prix ET LES REMISES
                                     st.markdown(f"""
                                     <div style="background-color: {couleur_box}; padding: 15px; border-radius: 10px; border: 2px solid #333; margin-bottom: 15px;">
                                         <h4 style="margin: 0 0 10px 0;">🏆 MEILLEUR PRIX HISTORIQUE</h4>
                                         <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #28a745;">
                                             {prix_min:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_min}</span>
                                         </p>
+                                        <p style="font-size: 16px; margin: 5px 0; color: #666;">
+                                            ✨ Remise obtenue : <strong>{remise_min_txt}</strong>
+                                        </p>
                                         <hr style="margin: 15px 0; border: 1px solid #ccc;">
                                         <h4 style="margin: 10px 0;">📊 PRIX ACTUEL</h4>
                                         <p style="font-size: 20px; font-weight: bold; margin: 5px 0; color: {'#dc3545' if ecart_euros > 0.10 else '#28a745'};">
                                             {prix_actuel:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_actuel}</span>
                                         </p>
+                                        <p style="font-size: 16px; margin: 5px 0; color: #666;">
+                                            💰 Remise actuelle : <strong>{remise_actuelle_txt}</strong>
+                                        </p>
                                         {'<p style="margin: 10px 0; font-weight: bold; color: #dc3545;">⚠️ Tu payes ' + f'{ecart_euros:.2f}€ de PLUS ({ecart_pct:.1f}%)</p>' if ecart_euros > 0.10 else '<p style="margin: 10px 0; font-weight: bold; color: #28a745;">✅ Prix stable ou en baisse</p>'}
+
                                     </div>
                                     """, unsafe_allow_html=True)
                                     
@@ -1129,6 +1143,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
