@@ -21,14 +21,15 @@ try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
-    # Louis : On remet l'alerte ici. Si la connexion échoue, on affiche l'erreur en rouge.
+    # Louis : On affiche l'erreur si la liaison avec Supabase ou Gemini foire.
     st.error(f"Erreur connexion : {e}") 
 
 def charger_registre():
-    """Louis : Cette fonction interroge Supabase pour récupérer l'identité complète des articles déjà enregistrés"""
+    """Louis : On récupère l'identité complète des articles (nom, fourn, marque) depuis SQL"""
     try:
+        # On lit la table SQL 'accords_commerciaux'
         res = supabase.table("accords_commerciaux").select("*").execute()
-        # On stocke l'identité complète : type, valeur, unité, désignation, fournisseur et marque
+        # On crée un dictionnaire intelligent pour que l'IA puisse comparer plus tard
         return {r['article']: {
             'type': r['type_accord'], 
             'valeur': r['valeur'], 
@@ -42,16 +43,17 @@ def charger_registre():
         return {}
 
 def sauvegarder_accord(article, type_accord, valeur, unite="EUR", designation="", fournisseur="", marque=""):
-    """Louis : C'est ici qu'on remplit les nouvelles colonnes pour que Marcel et Louis s'y retrouvent"""
+    """Louis : Ici on enregistre ta décision (clic bouton) avec TOUTES les infos du produit"""
     try:
+        # On remplit les nouvelles colonnes pour ne plus avoir une base de données anonyme
         supabase.table("accords_commerciaux").upsert({
             "article": article,
             "type_accord": type_accord,
             "valeur": valeur,
             "unite": unite,
-            "designation": designation, # Le nom lisible du produit
-            "fournisseur": fournisseur, # Qui nous vend ça
-            "marque": marque,           # La marque du fabricant
+            "designation": designation,
+            "fournisseur": fournisseur,
+            "marque": marque,
             "date_maj": datetime.now().strftime("%Y-%m-%d"),
             "modifie_par": "Système"
         }).execute()
@@ -997,6 +999,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
