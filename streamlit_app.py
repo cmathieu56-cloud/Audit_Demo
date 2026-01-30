@@ -928,7 +928,7 @@ if session:
                         sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
 
 # --- LIGNE DE REPÈRE APRÈS ---
-                        html_detail = (
+                        
                                 html_detail = (
                                     sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
                                     .set_properties(**{
@@ -1012,6 +1012,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
