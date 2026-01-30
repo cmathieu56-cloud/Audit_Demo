@@ -21,27 +21,34 @@ try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
-    st.error(f"Erreur connexion : {e}") 
-
-def charger_registre():
-    """Louis : On récupère l'accord, sa valeur et son unité (EUR ou %) depuis Supabase"""
+    def charger_registre():
+    """Louis : On récupère maintenant TOUTE l'identité de l'article depuis Supabase"""
     try:
-        # On lit la table SQL 'accords_commerciaux'
         res = supabase.table("accords_commerciaux").select("*").execute()
-        # On stocke maintenant l'unité dans le dictionnaire pour que l'IA sache quoi comparer
-        return {r['article']: {'type': r['type_accord'], 'valeur': r['valeur'], 'unite': r['unite'], 'date': r['date_maj']} for r in res.data}
+        # On stocke l'identité complète : type, valeur, unité, désignation, fournisseur et marque
+        return {r['article']: {
+            'type': r['type_accord'], 
+            'valeur': r['valeur'], 
+            'unite': r['unite'], 
+            'designation': r.get('designation', ''),
+            'fournisseur': r.get('fournisseur', ''),
+            'marque': r.get('marque', ''),
+            'date': r['date_maj']
+        } for r in res.data}
     except:
         return {}
 
-def sauvegarder_accord(article, type_accord, valeur, unite="EUR"):
-    """Louis : On enregistre la valeur ET l'unité (EUR ou %) pour ne plus faire de calculs à la toto"""
+def sauvegarder_accord(article, type_accord, valeur, unite="EUR", designation="", fournisseur="", marque=""):
+    """Louis : C'est ici qu'on remplit les nouvelles colonnes pour que Marcel et Louis s'y retrouvent"""
     try:
-        # On utilise 'upsert' pour mettre à jour la ligne avec la nouvelle colonne 'unite'
         supabase.table("accords_commerciaux").upsert({
             "article": article,
             "type_accord": type_accord,
             "valeur": valeur,
             "unite": unite,
+            "designation": designation, # Le nom lisible du produit
+            "fournisseur": fournisseur, # Qui nous vend ça
+            "marque": marque,           # La marque du fabricant
             "date_maj": datetime.now().strftime("%Y-%m-%d"),
             "modifie_par": "Système"
         }).execute()
@@ -860,8 +867,8 @@ if session:
                                         # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
                                         accord_existant = registre.get(article)
 
-                                        if accord_existant and accord_existant['type'] == "CONTRAT": # <--- LIGNE DE REPERE AVANT
-                                            # Louis : Si un contrat est déjà signé, on affiche sa valeur verrouillée.
+                                        if accord_existant and accord_existant['type'] == "CONTRAT":
+                                            # Louis : On affiche le nom du produit s'il est connu en base
                                             st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}{accord_existant['unite']}**")
                                             
                                             col_mod_input, col_mod_btn = st.columns([2, 3])
@@ -876,31 +883,29 @@ if session:
                                                 )
                                             with col_mod_btn:
                                                 if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                    # On met à jour le contrat avec l'unité % par défaut
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%")
+                                                    # On capture tout : désignation et fournisseur
+                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%", row['Désignation'], fourn_nom, "")
                                                     st.rerun()
                                         else:
-                                            # Louis : Si c'est libre, on propose de verrouiller la remise cible calculée par l'IA.
                                             if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%")
+                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%", row['Désignation'], fourn_nom, "")
                                                 st.rerun()
 
                                     with c_bt2:
-                                        # Louis : On décide intelligemment si on stocke un % (YESSS) ou un prix Net (EUR).
                                         val_promo_sql = clean_float(remise_ref.replace('%',''))
                                         unite_promo_sql = "%"
-                                        
                                         if val_promo_sql <= 0:
                                             val_promo_sql = val_hist
                                             unite_promo_sql = "EUR"
 
                                         if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql)
+                                            # Ici aussi, on enregistre l'identité complète de l'article
+                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql, row['Désignation'], fourn_nom, "")
                                             st.rerun()
 
                                     with c_bt3:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                            sauvegarder_accord(article, "ERREUR", 0, "EUR")
+                                            sauvegarder_accord(article, "ERREUR", 0, "EUR", row['Désignation'], fourn_nom, "")
                                             st.rerun()
 
                                     # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
@@ -989,6 +994,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
