@@ -146,6 +146,18 @@ def detecter_famille(label, ref=""):
     
     return "AUTRE_PRODUIT"
 
+def detecter_famille_cuivre(article, designation):
+    """Identifie si un article contient du cuivre (prix variable)."""
+    label_up = str(designation).upper()
+    ref_up = str(article).upper()
+    
+    keywords_cuivre = [
+        "CABLE", "U1000", "R2V", "H07", "FIL", "COURONNE", 
+        "TOURET", "ICTA", "XVB", "RO2V", "CUIVRE", "GAINE PREFILEE"
+    ]
+    
+    return any(kw in label_up or kw in ref_up for kw in keywords_cuivre)
+
 def calculer_seuil_tolerance(is_cuivre):
     """
     LOUIS : Renvoie le seuil de tolérance selon le type de produit.
@@ -1117,6 +1129,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
