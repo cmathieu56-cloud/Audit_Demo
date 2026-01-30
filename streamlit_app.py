@@ -912,7 +912,7 @@ if session:
                                         if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
                                             # On sauvegarde avec la bonne unité détectée pour YESSS ou les autres
                                             sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql)
-                                            st.rerun())
+                                            st.rerun()
                                     with c_bt3:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                             sauvegarder_accord(article, "ERREUR", 0)
@@ -1003,6 +1003,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
