@@ -927,22 +927,23 @@ if session:
                         # On prépare les données pour l'affichage du tableau de détails
                         sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
 
-# --- LIGNE DE REPÈRE APRÈS ---
+                        # Louis : On transforme notre tableau de données (DataFrame) en un beau tableau HTML pour le Web.
+                        # On définit ici le style : texte centré, bordures noires fines, et titres en gris.
+                        html_detail = (
+                            sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
+                            .set_properties(**{
+                                'text-align': 'center', 'border': '1px solid black', 'color': 'black'
+                            })
+                            .set_table_styles([
+                                {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
+                                {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
+                            ])
+                            .hide(axis="index")
+                            .to_html()
+                        )
                         
-                                html_detail = (
-                                    sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
-                                    .set_properties(**{
-                                        'text-align': 'center', 'border': '1px solid black', 'color': 'black'
-                                    })
-                                    .set_table_styles([
-                                        {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
-                                        {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
-                                    ])
-                                    .hide(axis="index")
-                                    .to_html()
-                                )
-                                
-                                st.markdown(html_detail, unsafe_allow_html=True)
+                        # Louis : C'est ici qu'on injecte le tableau HTML créé au-dessus directement dans la page Streamlit.
+                        st.markdown(html_detail, unsafe_allow_html=True)
                     
 
     with tab_import:
@@ -1012,6 +1013,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
