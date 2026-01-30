@@ -872,58 +872,63 @@ if session:
                                     except:
                                         txt_prix_cible = ""
 
-                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
-                                
-                                # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
-                                c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                # On crée une clé unique en combinant Fournisseur + Article pour éviter les doublons d'ID Streamlit
-                                cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
-                                
-                                with c_bt1:
-                                    # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
-                                    accord_existant = registre.get(article)
+                                    # --- LIGNE DE REPÈRE AVANT ---
+                        st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
 
-                                    if accord_existant and accord_existant['type'] == "CONTRAT":
-                                        # CAS A : OUI, un contrat est déjà verrouillé.
-                                        st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
-                                        
-                                        col_mod_input, col_mod_btn = st.columns([2, 3])
-                                        
-                                        with col_mod_input:
-                                            # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
-                                            nouvelle_remise_val = st.number_input(
-                                                label="Modif Remise",
-                                                value=float(accord_existant['valeur']),
-                                                step=0.5,
-                                                format="%.2f",
-                                                key=f"input_mod_{cle_unique}",
-                                                label_visibility="collapsed"
-                                            )
-                                        
-                                        with col_mod_btn:
-                                            if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, user_id)
-                                                st.rerun()
-                                    else:
-                                        # CAS B : NON, c'est libre.
-                                        if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                            val_clean = clean_float(str(remise_ref).replace('%',''))
-                                            sauvegarder_accord(article, "CONTRAT", val_clean, user_id)
-                                            st.rerun()
+                        # --- INTERFACE D'ARBITRAGE MARCEL (BLOC RÉALIGNÉ) ---
+                        # On prépare 3 colonnes pour les boutons d'action
+                        c_bt1, c_bt2, c_bt3 = st.columns(3)
+                        
+                        # Création d'un identifiant unique pour ne pas mélanger les boutons des différents articles
+                        cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
+                        
+                        with c_bt1:
+                            # On regarde si un contrat est déjà enregistré pour cet article
+                            accord_existant = registre.get(article)
 
-                                with c_bt2:
-                                    if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                        sauvegarder_accord(article, "PROMO", 0, user_id)
+                            if accord_existant and accord_existant['type'] == "CONTRAT":
+                                # Si un contrat existe, on affiche la valeur et on permet de la modifier
+                                st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
+                                col_mod_input, col_mod_btn = st.columns([2, 3])
+                                
+                                with col_mod_input:
+                                    nouvelle_remise_val = st.number_input(
+                                        label="Modif Remise",
+                                        value=float(accord_existant['valeur']),
+                                        step=0.5,
+                                        format="%.2f",
+                                        key=f"input_mod_{cle_unique}",
+                                        label_visibility="collapsed"
+                                    )
+                                
+                                with col_mod_btn:
+                                    if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                        sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, user_id)
                                         st.rerun()
+                            else:
+                                # Si aucun contrat, on propose de verrouiller la remise détectée par l'IA
+                                if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
+                                    val_clean = clean_float(str(remise_ref).replace('%',''))
+                                    sauvegarder_accord(article, "CONTRAT", val_clean, user_id)
+                                    st.rerun()
 
-                                with c_bt3:
-                                    if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                        sauvegarder_accord(article, "ERREUR", 0, user_id)
-                                        st.rerun()
+                        with c_bt2:
+                            # Bouton pour classer l'article en "Promotion" (pour ne plus l'auditer comme prix de référence)
+                            if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                sauvegarder_accord(article, "PROMO", 0, user_id)
+                                st.rerun()
 
-                                # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
-                                sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
-                                
+                        with c_bt3:
+                            # Bouton pour ignorer manuellement une erreur d'interprétation de l'IA
+                            if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
+                                sauvegarder_accord(article, "ERREUR", 0, user_id)
+                                st.rerun()
+
+                        # On prépare les données pour l'affichage du tableau de détails
+                        sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
+
+# --- LIGNE DE REPÈRE APRÈS ---
+                        html_detail = (
                                 html_detail = (
                                     sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
                                     .set_properties(**{
@@ -1007,6 +1012,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
