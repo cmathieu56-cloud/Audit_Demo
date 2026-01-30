@@ -968,7 +968,13 @@ if session:
                                     ecart_pct = ((prix_actuel / prix_min) - 1) * 100 if prix_min > 0 else 0
                                     
                                     # LOUIS : Récupération des remises historique et actuelle
-                                    remise_min = group[group['Payé (U)'] == prix_min]['Remise'].iloc[0]
+                                    # On utilise le ref_map pour avoir la VRAIE meilleure remise
+                                    if article in ref_map:
+                                        remise_min_val = ref_map[article]['Best_Remise']
+                                        remise_min = f"{remise_min_val:.4g}%"
+                                    else:
+                                        remise_min = group[group['Payé (U)'] == prix_min]['Remise'].iloc[0]
+                                    
                                     remise_actuelle = group['Remise'].iloc[-1]
                                     
                                     # Formatage des remises pour l'affichage
@@ -1143,6 +1149,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
