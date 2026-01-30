@@ -23,42 +23,24 @@ try:
 except Exception as e:
     st.error(f"Erreur connexion : {e}")
 
-# --- VERSION SUPABASE (CLOUD) ---
-# On vire REGISTRE_FILE, on passe en direct sur la base.
+REGISTRE_FILE = "registre_accords.json"
 
 def charger_registre():
-    """Charge les accords directement depuis Supabase"""
-    try:
-        # On récupère tout le contenu de la table
-        response = supabase.table("accords_commerciaux").select("*").execute()
-        registre = {}
-        # On convertit le format Supabase en format Dictionnaire pour le script
-        for row in response.data:
-            registre[row['article']] = {
-                "type": row['type_accord'], 
-                "valeur": row['valeur'],
-                "date": row['date_maj']
-            }
-        return registre
-    except Exception as e:
-        return {}
+    if os.path.exists(REGISTRE_FILE):
+        with open(REGISTRE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-def sauvegarder_accord(article, type_accord, valeur, user_id="Système"):
-    """Enregistre ou met à jour un accord dans Supabase"""
-    try:
-        data_to_save = {
-            "article": article,
-            "type_accord": type_accord,
-            "valeur": valeur,
-            "date_maj": datetime.now().strftime("%Y-%m-%d"),
-            "modifie_par": str(user_id)
-        }
-        # Upsert = Si existe maj, sinon crée
-        supabase.table("accords_commerciaux").upsert(data_to_save).execute()
-        return True
-    except Exception as e:
-        st.error(f"Erreur sauvegarde Cloud : {e}")
-        return False# ==============================================================================
+def sauvegarder_accord(article, type_accord, valeur):
+    registre = charger_registre()
+    registre[article] = {
+        "type": type_accord, 
+        "valeur": valeur,
+        "date": datetime.now().strftime("%Y-%m-%d")
+    }
+    with open(REGISTRE_FILE, "w", encoding="utf-8") as f:
+        json.dump(registre, f, indent=4)
+# ==============================================================================
 # 2. LOGIQUE MÉTIER
 # ==============================================================================
 
@@ -535,37 +517,17 @@ if session:
                     valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
                     valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True)
                     
-                    # --- GESTION INTELLIGENTE "PROMO" (EXCLUSION TOTALE) ---
-                    # Par défaut, on prend le meilleur record
-                    best_r_row = valid_remises.iloc[0] if not valid_remises.empty else group.iloc[0]
-                    best_p_row = valid_prices.iloc[0] if not valid_prices.empty else group.iloc[0]
+                    # Gestion du cas PROMO : on ignore le record n°1
+                    idx_r, idx_p = 0, 0
+                    if accord and accord['type'] == "PROMO":
+                        if len(valid_remises) > 1: idx_r = 1
+                        if len(valid_prices) > 1: idx_p = 1
                     
-                    reference_fiable = True # <-- On ajoute cette sécurité (Louis : par défaut c'est fiable)
-
-                    # Si MARCEL a dit "C'est une Promo", on disqualifie le record actuel
-                    if accord and accord['type'] == "PROMO" and not valid_remises.empty:
-                        # 1. On identifie le taux "Promo" (le plus haut) qu'on veut bannir
-                        taux_promo_banni = valid_remises.iloc[0]['Remise_Val']
-                        
-                        # 2. On filtre l'historique pour ne garder que ce qui est STRICTEMENT INFÉRIEUR
-                        # Louis : On cherche la "Vraie Vie", pas le one-shot à 64%
-                        df_hors_promo = valid_remises[valid_remises['Remise_Val'] < taux_promo_banni]
-                        
-                        if not df_hors_promo.empty:
-                            best_r_row = df_hors_promo.iloc[0]
-                            # Pour le prix, on reste cohérent : on prend le meilleur prix PARMI ces factures normales
-                            best_p_row = df_hors_promo.sort_values('PU_Systeme', ascending=True).iloc[0]
-                        else:
-                            # Cas rare : On n'a QUE de la promo dans l'historique
-                            # On signale que la ref n'est pas fiable pour ne pas afficher d'erreur.
-                            reference_fiable = False 
-                    # -------------------------------------------------------
+                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0]
+                    best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
 
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
                     remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
-                    
-                    # Sécurité : Si historique vide (que de la promo), on force 0 pour ne pas créer de fausse dette
-                    if not reference_fiable: remise_finale = 0
 
                     # --- CORRECTION LOGIQUE "PRIX NET" vs "PRIX BRUT" ---
                     # Si le meilleur prix est un "Net" (0 remise) et qu'il est meilleur que le prix remisé habituel
@@ -587,10 +549,9 @@ if session:
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
-                        'Date_Price': best_p_row['Date'],
-                        'Reference_Fiable': reference_fiable # <-- Ajout ici pour le transmettre au calcul
+                        'Date_Price': best_p_row['Date']
                     }
-                
+
                     # --- MODIFICATION : ON COMMENTE TOUT POUR ARRETER LE LAG ---
                     # if remise_finale > 0:
                     #     try:
@@ -653,45 +614,37 @@ if session:
                     if art in ref_map and art != 'SANS_REF':
                         m = ref_map[art]
 
-                        # --- SECURITE ANTI-BUG PROMO (ACTIVATION) ---
-                        # Si on n'a que de la promo en historique, on ne calcule pas de perte
-                        if not m.get('Reference_Fiable', True):
-                             perte = 0
-                             motif = "Historique 100% Promo (Attente prochain achat standard)"
+# --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
+                        # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
+                        # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
+                        # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
+                        prix_historique_ref = m['Price_At_Best_Remise']
                         
-                        # Sinon on lance le calcul normal...
-                        elif True:
-                            # --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
-                            # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
-                            # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
-                            # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
-                            prix_historique_ref = m['Price_At_Best_Remise']
+                        # REGLE 1 : SECURITE ABSOLUE (Berner)
+                        # Si on paye le prix record ou moins, perte = 0
+                        if pu_paye <= m['Best_Price_Net'] + 0.05:
+                            perte = 0
+                        
+                        # REGLE 2 : RESPECT DE LA REMISE (Thermor)
+                        elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
+                            perte = 0
                             
-                            # REGLE 1 : SECURITE ABSOLUE (Berner)
-                            # Si on paye le prix record ou moins, perte = 0
-                            if pu_paye <= m['Best_Price_Net'] + 0.05:
-                                perte = 0
+                        # REGLE 3 : CALCUL DE LA PERTE
+                        else:
+                            # On cherche la meilleure cible possible entre le prix record et la remise théorique
+                            cible_remise = 999999.0
+                            if m['Best_Brut_Associe'] > 0:
+                                cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
+                                if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
+                                    cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
                             
-                            # REGLE 2 : RESPECT DE LA REMISE (Thermor)
-                            elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
-                                perte = 0
-                                
-                            # REGLE 3 : CALCUL DE LA PERTE
-                            else:
-                                # On cherche la meilleure cible possible entre le prix record et la remise théorique
-                                cible_remise = 999999.0
-                                if m['Best_Brut_Associe'] > 0:
-                                    cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
-                                    if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
-                                        cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
-                                
-                                cible = min(m['Best_Price_Net'], cible_remise)
-                                
-                                if pu_paye > cible + 0.05:
-                                    perte = (pu_paye - cible) * row['Quantité']
-                                    motif = "Hausse de prix"
-                                    source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
-                                    remise_cible_str = f"{m['Best_Remise']:g}%"
+                            cible = min(m['Best_Price_Net'], cible_remise)
+                            
+                            if pu_paye > cible + 0.05:
+                                perte = (pu_paye - cible) * row['Quantité']
+                                motif = "Hausse de prix"
+                                source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
+                                remise_cible_str = f"{m['Best_Remise']:g}%"
 
                 if perte > 0.01:
                     # --- Nettoyage Affichage Prix Brut ---
@@ -872,78 +825,75 @@ if session:
                                     except:
                                         txt_prix_cible = ""
 
-                                    # --- LIGNE DE REPÈRE AVANT ---
-                        st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
+                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
+                                    
+                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
+                                    c_bt1, c_bt2, c_bt3 = st.columns(3)
+                                    # On crée une clé unique en combinant Fournisseur + Article
+                                    # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
+                                    cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
+                                    
+                                    with c_bt1:
 
-                        # --- INTERFACE D'ARBITRAGE MARCEL (BLOC RÉALIGNÉ) ---
-                        # On prépare 3 colonnes pour les boutons d'action
-                        c_bt1, c_bt2, c_bt3 = st.columns(3)
-                        
-                        # Création d'un identifiant unique pour ne pas mélanger les boutons des différents articles
-                        cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
-                        
-                        with c_bt1:
-                            # On regarde si un contrat est déjà enregistré pour cet article
-                            accord_existant = registre.get(article)
+# --- REMPLACEMENT AVEC COMMENTAIRES POUR LOUIS ---
+                                        # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
+                                        accord_existant = registre.get(article)
 
-                            if accord_existant and accord_existant['type'] == "CONTRAT":
-                                # Si un contrat existe, on affiche la valeur et on permet de la modifier
-                                st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
-                                col_mod_input, col_mod_btn = st.columns([2, 3])
-                                
-                                with col_mod_input:
-                                    nouvelle_remise_val = st.number_input(
-                                        label="Modif Remise",
-                                        value=float(accord_existant['valeur']),
-                                        step=0.5,
-                                        format="%.2f",
-                                        key=f"input_mod_{cle_unique}",
-                                        label_visibility="collapsed"
+                                        if accord_existant and accord_existant['type'] == "CONTRAT":
+                                            # CAS A : OUI, un contrat est déjà verrouillé.
+                                            # -> On affiche la valeur figée et l'interface pour la modifier (Input + Bouton)
+                                            st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}%**")
+                                            
+                                            # On découpe la colonne en 2 : une petite pour saisir, une grande pour valider
+                                            col_mod_input, col_mod_btn = st.columns([2, 3])
+                                            
+                                            with col_mod_input:
+                                                # Champ de saisie numérique (pré-rempli avec l'ancienne valeur)
+                                                nouvelle_remise_val = st.number_input(
+                                                    label="Modif Remise",
+                                                    value=float(accord_existant['valeur']),
+                                                    step=0.5,
+                                                    format="%.2f",
+                                                    key=f"input_mod_{cle_unique}",
+                                                    label_visibility="collapsed" # On cache le label pour gagner de la place
+                                                )
+                                            
+                                            with col_mod_btn:
+                                                # Bouton de sauvegarde de la modification
+                                                if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val)
+                                                    st.rerun() # Rafraîchissement immédiat de la page
+                                        else:
+                                            # CAS B : NON, c'est libre.
+                                            # -> On affiche le bouton "Fusée" pour verrouiller la remise cible proposée par l'algo
+                                            if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
+                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')))
+                                                st.rerun()
+                                    with c_bt2:
+                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
+                                            sauvegarder_accord(article, "PROMO", 0)
+                                            st.rerun()
+                                    with c_bt3:
+                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
+                                            sauvegarder_accord(article, "ERREUR", 0)
+                                            st.rerun()
+                                    # C'est ici qu'on décide quelles colonnes s'affichent dans le petit tableau
+                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
+                                    
+                                    html_detail = (
+                                        sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
+                                        .set_properties(**{
+                                            'text-align': 'center', 'border': '1px solid black', 'color': 'black'
+                                        })
+                                        .set_table_styles([
+                                            {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
+                                            {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
+                                        ])
+                                        .hide(axis="index")
+                                        .to_html()
                                     )
-                                
-                                with col_mod_btn:
-                                    if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                        sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, user_id)
-                                        st.rerun()
-                            else:
-                                # Si aucun contrat, on propose de verrouiller la remise détectée par l'IA
-                                if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                    val_clean = clean_float(str(remise_ref).replace('%',''))
-                                    sauvegarder_accord(article, "CONTRAT", val_clean, user_id)
-                                    st.rerun()
-
-                        with c_bt2:
-                            # Bouton pour classer l'article en "Promotion" (pour ne plus l'auditer comme prix de référence)
-                            if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                sauvegarder_accord(article, "PROMO", 0, user_id)
-                                st.rerun()
-
-                        with c_bt3:
-                            # Bouton pour ignorer manuellement une erreur d'interprétation de l'IA
-                            if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                sauvegarder_accord(article, "ERREUR", 0, user_id)
-                                st.rerun()
-
-                        # On prépare les données pour l'affichage du tableau de détails
-                        sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
-
-                        # Louis : On transforme notre tableau de données (DataFrame) en un beau tableau HTML pour le Web.
-                        # On définit ici le style : texte centré, bordures noires fines, et titres en gris.
-                        html_detail = (
-                            sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
-                            .set_properties(**{
-                                'text-align': 'center', 'border': '1px solid black', 'color': 'black'
-                            })
-                            .set_table_styles([
-                                {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
-                                {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
-                            ])
-                            .hide(axis="index")
-                            .to_html()
-                        )
-                        
-                        # Louis : C'est ici qu'on injecte le tableau HTML créé au-dessus directement dans la page Streamlit.
-                        st.markdown(html_detail, unsafe_allow_html=True)
+                                    
+                                    st.markdown(html_detail, unsafe_allow_html=True)
                     
 
     with tab_import:
@@ -1013,15 +963,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
-
-
-
-
-
-
 
 
 
