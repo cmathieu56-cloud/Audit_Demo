@@ -146,17 +146,16 @@ def detecter_famille(label, ref=""):
     
     return "AUTRE_PRODUIT"
 
-def detecter_famille_cuivre(article, designation):
-    """Identifie si un article contient du cuivre (prix variable)."""
-    label_up = str(designation).upper()
-    ref_up = str(article).upper()
-    
-    keywords_cuivre = [
-        "CABLE", "U1000", "R2V", "H07", "FIL", "COURONNE", 
-        "TOURET", "ICTA", "XVB", "RO2V", "CUIVRE"
-    ]
-    
-    return any(kw in label_up or kw in ref_up for kw in keywords_cuivre)
+def calculer_seuil_tolerance(is_cuivre):
+    """
+    LOUIS : Renvoie le seuil de tolérance selon le type de produit.
+    - Cuivre : ±30% (matière première volatile)
+    - Stable : ±10% (inflation normale 1-2%)
+    """
+    if is_cuivre:
+        return 1.30  # ±30% pour le cuivre
+    else:
+        return 1.10  # ±10% pour produits stables
 
 def extraire_json_robuste(texte):
     try:
@@ -733,24 +732,32 @@ if session:
                                     else:
                                         detail_tech = f"(Brut {brut_actuel:.2f}€)"
                             
-                            if not is_cuivre and perte == 0:
-                                brut_historique = m['Best_Brut_Associe']
+                            # LOUIS : Vérification hausse prix brut (cuivre vs stable)
+                        if perte == 0:  # Seulement si pas déjà détecté
+                            brut_historique = m['Best_Brut_Associe']
+                            
+                            # Calcul du seuil selon le type de produit
+                            seuil_tolerance = calculer_seuil_tolerance(is_cuivre)
+                            
+                            if brut_actuel > brut_historique * seuil_tolerance:
+                                prix_attendu = brut_historique * (1 - remise_actuelle/100)
                                 
-                                if brut_actuel > brut_historique * 1.03:
-                                    prix_attendu = brut_historique * (1 - remise_actuelle/100)
+                                if pu_paye > prix_attendu + 0.05:
+                                    perte = (pu_paye - prix_attendu) * row['Quantité']
+                                    cible = prix_attendu
                                     
-                                    if pu_paye > prix_attendu + 0.05:
-                                        perte = (pu_paye - prix_attendu) * row['Quantité']
-                                        cible = prix_attendu
-                                        
-                                        hausse_brut_pct = ((brut_actuel / brut_historique) - 1) * 100
-                                        motif = f"Brut augmenté de {hausse_brut_pct:.1f}% (Produit stable, pas de cuivre)"
-                                        remise_cible_str = f"{remise_actuelle}%"
-                                        detail_tech = f"(Brut historique : {brut_historique:.2f}€ → Actuel : {brut_actuel:.2f}€)"
-                                        prix_historique_ref = m['Price_At_Best_Remise']
-                        
-                        else:
-                            prix_historique_ref = m['Price_At_Best_Remise']
+                                    hausse_brut_pct = ((brut_actuel / brut_historique) - 1) * 100
+                                    
+                                    # Message différencié selon le type de produit
+                                    if is_cuivre:
+                                        motif = f"⚠️ Brut +{hausse_brut_pct:.1f}% (CUIVRE : Seuil 30% dépassé)"
+                                        detail_tech = f"(Cuivre volatil : Brut {brut_historique:.2f}€ → {brut_actuel:.2f}€)"
+                                    else:
+                                        motif = f"🚨 Brut +{hausse_brut_pct:.1f}% (Produit stable : Seuil 10% dépassé)"
+                                        detail_tech = f"(Produit stable : Brut {brut_historique:.2f}€ → {brut_actuel:.2f}€)"
+                                    
+                                    remise_cible_str = f"{remise_actuelle}%"
+                                    prix_historique_ref = m['Price_At_Best_Remise']
                             
                             if pu_paye <= m['Best_Price_Net'] + 0.05:
                                 perte = 0
@@ -1110,6 +1117,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
