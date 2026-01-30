@@ -960,6 +960,21 @@ if session:
 
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
                                     
+                                    # LOUIS : Affichage des alertes prix forcé
+                                    badge_alerte = ""
+                                    if article in ref_map:
+                                        alerte = ref_map[article].get('Alerte_Prix_Force')
+                                        
+                                        if alerte == "PROMO_OK":
+                                            badge_alerte = " 🟢 **Promo légitime détectée**"
+                                        elif alerte == "SUSPECT":
+                                            badge_alerte = " 🔴 **ALERTE : Prix sans remise suspect**"
+                                        elif alerte == "ANCIEN":
+                                            mois = ref_map[article].get('Derniere_Commande_Mois', 0)
+                                            badge_alerte = f" 🟠 **À vérifier : Dernière commande il y a {mois} mois**"
+                                    
+                                    st.markdown(f"**📦 {article}** - {nom_art}{badge_alerte} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
+                                    
                                     # --- INTERFACE D'ARBITRAGE (CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
                                     # On crée une clé unique en combinant Fournisseur + Article
@@ -1099,6 +1114,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
