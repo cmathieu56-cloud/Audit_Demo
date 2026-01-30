@@ -935,66 +935,71 @@ if session:
                         # -------------------------------------
                         
                         for article, group in df_litiges_fourn.groupby('Ref'):
-                                    # LOUIS : On récupère la date de référence pour l'affichage
-                                    # Problème : Avec la nouvelle logique YESSS, la colonne "Source Cible" peut être vide ("-")
-                                    # Solution : Si elle est vide, on prend la date de la facture à la place
+                                    # LOUIS : Récupération des infos de base
                                     source_brute = group['Source Cible'].iloc[0]
                                     date_ref = source_brute if source_brute != "-" else group['Date Facture'].iloc[0]
-                                    
                                     remise_ref = group['Remise Cible'].iloc[0]
                                     nom_art = group['Désignation'].iloc[0]
-
-
-# --- CORRECTION FINALE TITRE (SPECIAL LOUIS) ---
-                                    # Louis : Au lieu de faire un calcul (Prix * %), on lit juste la valeur qu'on a transportée.
-                                    try:
-                                        val_hist = group['Prix_Ref_Hist'].iloc[0]
-                                        
-                                        # Si on a un prix historique (ex: 56.75), on l'affiche.
-                                        if val_hist > 0:
-                                            txt_prix_cible = f" 👉 Soit **{val_hist:.4f} €**"
-                                        else:
-                                            txt_prix_cible = ""
-                                    except:
-                                        txt_prix_cible = ""
-
-                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
                                     
-                                    # LOUIS : Affichage des alertes prix forcé
+                                    # LOUIS : Calcul des données pour le résumé visuel
+                                    prix_min = group['Payé (U)'].min()
+                                    prix_actuel = group['Payé (U)'].iloc[-1]
+                                    date_min = group[group['Payé (U)'] == prix_min]['Date Facture'].iloc[0]
+                                    date_actuel = group['Date Facture'].iloc[-1]
+                                    ecart_euros = prix_actuel - prix_min
+                                    ecart_pct = ((prix_actuel / prix_min) - 1) * 100 if prix_min > 0 else 0
+                                    
+                                    # LOUIS : Détection du type d'alerte
                                     badge_alerte = ""
+                                    couleur_box = "#f0f0f0"
                                     if article in ref_map:
                                         alerte = ref_map[article].get('Alerte_Prix_Force')
-                                        
                                         if alerte == "PROMO_OK":
-                                            badge_alerte = " 🟢 **Promo légitime détectée**"
+                                            badge_alerte = "🟢 Promo légitime détectée"
+                                            couleur_box = "#d4edda"
                                         elif alerte == "SUSPECT":
-                                            badge_alerte = " 🔴 **ALERTE : Prix sans remise suspect**"
+                                            badge_alerte = "🔴 ALERTE : Prix sans remise suspect"
+                                            couleur_box = "#f8d7da"
                                         elif alerte == "ANCIEN":
                                             mois = ref_map[article].get('Derniere_Commande_Mois', 0)
-                                            badge_alerte = f" 🟠 **À vérifier : Dernière commande il y a {mois} mois**"
+                                            badge_alerte = f"🟠 À vérifier : Dernière commande il y a {mois} mois"
+                                            couleur_box = "#fff3cd"
                                     
-                                    st.markdown(f"**📦 {article}** - {nom_art}{badge_alerte} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
+                                    # LOUIS : Affichage du titre et du badge
+                                    st.markdown(f"### 📦 {article} - {nom_art}")
+                                    if badge_alerte:
+                                        st.markdown(f"**{badge_alerte}**")
                                     
-                                    # --- INTERFACE D'ARBITRAGE (CORRECTIF CLÉ UNIQUE) ---
+                                    # LOUIS : Box résumé avec les prix
+                                    st.markdown(f"""
+                                    <div style="background-color: {couleur_box}; padding: 15px; border-radius: 10px; border: 2px solid #333; margin-bottom: 15px;">
+                                        <h4 style="margin: 0 0 10px 0;">🏆 MEILLEUR PRIX HISTORIQUE</h4>
+                                        <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #28a745;">
+                                            {prix_min:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_min}</span>
+                                        </p>
+                                        <hr style="margin: 15px 0; border: 1px solid #ccc;">
+                                        <h4 style="margin: 10px 0;">📊 PRIX ACTUEL</h4>
+                                        <p style="font-size: 20px; font-weight: bold; margin: 5px 0; color: {'#dc3545' if ecart_euros > 0.10 else '#28a745'};">
+                                            {prix_actuel:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_actuel}</span>
+                                        </p>
+                                        {'<p style="margin: 10px 0; font-weight: bold; color: #dc3545;">⚠️ Tu payes ' + f'{ecart_euros:.2f}€ de PLUS ({ecart_pct:.1f}%)</p>' if ecart_euros > 0.10 else '<p style="margin: 10px 0; font-weight: bold; color: #28a745;">✅ Prix stable ou en baisse</p>'}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # LOUIS : Boutons d'arbitrage
+                                    st.markdown("**🎯 ACTION REQUISE :**")
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                    # On crée une clé unique en combinant Fournisseur + Article
-                                    # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
                                     cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
                                     
+                                    accord_existant = registre.get(article)
+                                    
                                     with c_bt1:
-
-# --- REMPLACEMENT AVEC COMMENTAIRES POUR LOUIS ---
-                                        # 1. On interroge le registre : Est-ce qu'on a déjà signé un truc pour cet article ?
-                                        accord_existant = registre.get(article)
-
                                         if accord_existant and accord_existant['type'] == "CONTRAT":
-                                            # Louis : On affiche le nom du produit s'il est connu en base
-                                            st.write(f"🔒 Contrat actuel : **{accord_existant['valeur']}{accord_existant['unite']}**")
-                                            
+                                            st.write(f"🔒 Contrat : **{accord_existant['valeur']}{accord_existant['unite']}**")
                                             col_mod_input, col_mod_btn = st.columns([2, 3])
                                             with col_mod_input:
                                                 nouvelle_remise_val = st.number_input(
-                                                    label="Modif Remise",
+                                                    label="Modif",
                                                     value=float(accord_existant['valeur']),
                                                     step=0.5,
                                                     format="%.2f",
@@ -1003,48 +1008,39 @@ if session:
                                                 )
                                             with col_mod_btn:
                                                 if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                    # On capture tout : désignation et fournisseur
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%", row['Désignation'], fourn_nom, "")
+                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%", nom_art, fourn_nom, "")
                                                     st.rerun()
                                         else:
-                                            if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%", row['Désignation'], fourn_nom, "")
+                                            if st.button(f"🚀 Contrat ({remise_ref})", key=f"v_{cle_unique}", use_container_width=True):
+                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%", nom_art, fourn_nom, "")
                                                 st.rerun()
-
+                                    
                                     with c_bt2:
-                                        val_promo_sql = clean_float(remise_ref.replace('%',''))
-                                        unite_promo_sql = "%"
-                                        if val_promo_sql <= 0:
-                                            val_promo_sql = val_hist
-                                            unite_promo_sql = "EUR"
-
-                                        if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            # Ici aussi, on enregistre l'identité complète de l'article
-                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql, row['Désignation'], fourn_nom, "")
+                                        val_promo_sql = prix_min
+                                        if st.button("🟢 C'était une PROMO", key=f"p_{cle_unique}", use_container_width=True):
+                                            sauvegarder_accord(article, "PROMO", val_promo_sql, "EUR", nom_art, fourn_nom, "")
                                             st.rerun()
-
+                                    
                                     with c_bt3:
-                                        if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                            sauvegarder_accord(article, "ERREUR", 0, "EUR", row['Désignation'], fourn_nom, "")
+                                        if st.button("⚪ IGNORER", key=f"e_{cle_unique}", use_container_width=True):
+                                            sauvegarder_accord(article, "ERREUR", 0, "EUR", nom_art, fourn_nom, "")
                                             st.rerun()
-
-                                    # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
-                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']] # <--- LIGNE DE REPERE APRES
                                     
-                                    html_detail = (
-                                        sub_df.style.format({'Qte': "{:g}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
-                                        .set_properties(**{
-                                            'text-align': 'center', 'border': '1px solid black', 'color': 'black'
-                                        })
-                                        .set_table_styles([
-                                            {'selector': 'th', 'props': [('background-color', '#e0e0e0'), ('color', 'black'), ('text-align', 'center'), ('border', '1px solid black')]},
-                                            {'selector': 'table', 'props': [('border-collapse', 'collapse'), ('width', '100%'), ('margin-bottom', '20px')]}
-                                        ])
-                                        .hide(axis="index")
-                                        .to_html()
-                                    )
+                                    # LOUIS : Historique complet (masqué par défaut)
+                                    with st.expander("📋 Voir l'historique complet des achats"):
+                                        sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
+                                        st.dataframe(
+                                            sub_df,
+                                            hide_index=True,
+                                            use_container_width=True,
+                                            column_config={
+                                                "Qte": st.column_config.NumberColumn("Qte", format="%d"),
+                                                "Payé (U)": st.column_config.NumberColumn("Payé (U)", format="%.4f €"),
+                                                "Perte": st.column_config.NumberColumn("Perte", format="%.2f €")
+                                            }
+                                        )
                                     
-                                    st.markdown(html_detail, unsafe_allow_html=True)
+                                    st.markdown("---")
                     
 
     with tab_import:
@@ -1114,6 +1110,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
