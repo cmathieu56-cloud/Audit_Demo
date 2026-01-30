@@ -906,7 +906,7 @@ if session:
                                     
                                     remise_ref = group['Remise Cible'].iloc[0]
                                     nom_art = group['Désignation'].iloc[0]
-]
+
 
 # --- CORRECTION FINALE TITRE (SPECIAL LOUIS) ---
                                     # Louis : Au lieu de faire un calcul (Prix * %), on lit juste la valeur qu'on a transportée.
@@ -1062,6 +1062,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
