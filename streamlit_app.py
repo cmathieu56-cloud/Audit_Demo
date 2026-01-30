@@ -21,25 +21,31 @@ try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
-    st.error(f"Erreur connexion : {e}")
-
-REGISTRE_FILE = "registre_accords.json"
+    st.error(f"Erreur connexion : {e}") 
 
 def charger_registre():
-    if os.path.exists(REGISTRE_FILE):
-        with open(REGISTRE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    """Louis : Cette fonction interroge Supabase pour récupérer toutes les promos ou contrats déjà signés."""
+    try:
+        # On lit la table SQL 'accords_commerciaux' au lieu du fichier JSON
+        res = supabase.table("accords_commerciaux").select("*").execute()
+        # On transforme le tout en dictionnaire pour que l'IA puisse comparer les prix plus tard
+        return {r['article']: {'type': r['type_accord'], 'valeur': r['valeur'], 'date': r['date_maj']} for r in res.data}
+    except:
+        return {}
 
 def sauvegarder_accord(article, type_accord, valeur):
-    registre = charger_registre()
-    registre[article] = {
-        "type": type_accord, 
-        "valeur": valeur,
-        "date": datetime.now().strftime("%Y-%m-%d")
-    }
-    with open(REGISTRE_FILE, "w", encoding="utf-8") as f:
-        json.dump(registre, f, indent=4)
+    """Louis : Ici on enregistre ta décision (quand tu cliques sur un bouton) directement dans la base de données."""
+    try:
+        # On utilise 'upsert' : ça crée la ligne si elle n'existe pas, ou ça la met à jour si elle existe déjà
+        supabase.table("accords_commerciaux").upsert({
+            "article": article,
+            "type_accord": type_accord,
+            "valeur": valeur,
+            "date_maj": datetime.now().strftime("%Y-%m-%d"),
+            "modifie_par": "Système"
+        }).execute()
+    except Exception as e:
+        st.error(f"Erreur sauvegarde Supabase : {e}")
 # ==============================================================================
 # 2. LOGIQUE MÉTIER
 # ==============================================================================
@@ -515,15 +521,23 @@ if session:
                     
                     # Logique de sélection des records
                     valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
-                    valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True)
-                    
-                    # Gestion du cas PROMO : on ignore le record n°1
+                    valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True) # <--- LIGNE DE REPERE AVANT
+
+                    # --- CORRECTION PROMO ---
+                    # Louis : C'est ici qu'on résout le bug. Si tu marques un article comme "PROMO",
+                    # on identifie le prix de cette promo (le moins cher de la liste).
+                    # Ensuite, on dit au programme d'ignorer TOUTES les factures qui ont ce prix promo.
+                    # De cette façon, il va chercher le prix suivant (ton prix normal à 129 €) pour calculer la perte.
                     idx_r, idx_p = 0, 0
                     if accord and accord['type'] == "PROMO":
-                        if len(valid_remises) > 1: idx_r = 1
-                        if len(valid_prices) > 1: idx_p = 1
-                    
-                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0]
+                        if not valid_prices.empty:
+                            prix_promo = valid_prices.iloc[0]['PU_Systeme']
+                            # On filtre : on ne garde que les factures dont le prix est différent de la promo
+                            valid_prices = valid_prices[abs(valid_prices['PU_Systeme'] - prix_promo) > 0.10]
+                            valid_remises = valid_remises[abs(valid_remises['PU_Systeme'] - prix_promo) > 0.10]
+                    # -------------------------
+
+best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0] # <--- LIGNE DE REPERE APRES
                     best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
 
                     # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
@@ -963,6 +977,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
