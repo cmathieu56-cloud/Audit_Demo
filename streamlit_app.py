@@ -680,9 +680,13 @@ if session:
                                 source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
                                 remise_cible_str = f"{m['Best_Remise']:g}%"
 
-                # Seuil 3% : on ignore le bruit (arrondis, écotaxe)
-                ecart_pourcent = (perte / (cible * row['Quantité'])) * 100 if (cible > 0 and row['Quantité'] > 0) else 0
-                if perte > 0.01 and ecart_pourcent >= 3:
+                # Seuil 3% : on ignore le bruit (arrondis, écotaxe) - SAUF frais et port
+                if row['Famille'] in ["FRAIS GESTION", "FRAIS PORT"]:
+                    filtre_ok = perte > 0.01
+                else:
+                    ecart_pourcent = (perte / (cible * row['Quantité'])) * 100 if (cible > 0 and row['Quantité'] > 0) else 0
+                    filtre_ok = perte > 0.01 and ecart_pourcent >= 3
+                if filtre_ok:
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
                     try:
@@ -1004,6 +1008,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
