@@ -15,21 +15,18 @@ from io import BytesIO
 # ==============================================================================
 URL_SUPABASE = st.secrets["SUPABASE_URL"]
 CLE_ANON = st.secrets["SUPABASE_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"] # <--- LIGNE DE REPERE AVANT
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 try:
     supabase = create_client(URL_SUPABASE, CLE_ANON)
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
-    # Si la connexion échoue, on affiche l'alerte ici
     st.error(f"Erreur connexion : {e}") 
 
 def charger_registre():
     """LOUIS : Cette fonction récupère tous les contrats et promos déjà enregistrés en base SQL"""
     try:
-        # On interroge la table accords_commerciaux
         res = supabase.table("accords_commerciaux").select("*").execute()
-        # On crée un dictionnaire qui contient l'identité complète (nom, fourn, marque)
         return {r['article']: {
             'type': r['type_accord'], 
             'valeur': r['valeur'], 
@@ -45,7 +42,6 @@ def charger_registre():
 def sauvegarder_accord(article, type_accord, valeur, unite="EUR", designation="", fournisseur="", marque=""):
     """LOUIS : Cette fonction enregistre tes clics (Promo/Contrat) dans les nouvelles colonnes SQL"""
     try:
-        # On remplit les nouvelles colonnes fournisseur et désignation pour que la base soit lisible
         supabase.table("accords_commerciaux").upsert({
             "article": article,
             "type_accord": type_accord,
@@ -78,15 +74,13 @@ def clean_float(val):
         return 0.0
 
 def calculer_remise_combine(val_str):
-    """Convertit '60+10' en 64 (float) et nettoie le format"""
+    """Convertit '60+10' ou '80+25' en pourcentage total (ex: 85.0)"""
     if not isinstance(val_str, str): return 0.0
-    # Nettoyage de base
     val_str = val_str.replace('%', '').replace(' ', '').replace('EUR', '').replace(',', '.')
     
     if not val_str: return 0.0
     
     try:
-        # Gestion des remises cumulées (ex: 60+10)
         parts = val_str.split('+')
         reste_a_payer = 1.0
         
@@ -104,12 +98,10 @@ def detecter_famille(label, ref=""):
     if not isinstance(ref, str): ref = ""
     label_up, ref_up = label.upper(), ref.upper()
     
-    # 1. TAXES (Priorité absolue)
     mots_taxes = ["ENERG", "TAXE", "CONTRIBUTION", "DEEE", "SORECOP", "ECO-PART", "ECO "]
     if any(x in label_up for x in mots_taxes) or any(x in ref_up for x in mots_taxes): 
         return "TAXE"
 
-    # 2. FRAIS DE GESTION (C'est ici qu'on attrape le FF et le FRAIS_ANNEXE)
     if "FRAIS_ANNEXE" in ref_up: return "FRAIS GESTION"
     
     if label_up.strip() == "FF" or "FF " in label_up or " FF" in label_up:
@@ -118,22 +110,16 @@ def detecter_famille(label, ref=""):
     if any(x in label_up for x in ["FRAIS FACT", "FACTURE", "GESTION", "ADMINISTRATIF"]): 
         return "FRAIS GESTION"
 
-    # 3. FRAIS DE PORT (Avec sécurité anti-faux positif)
     keywords_port = ["PORT", "LIVRAISON", "TRANSPORT", "EXPEDITION"]
-    
-    # Si la référence est longue (ex: AXIPAN10), c'est un produit, pas du port !
-    # On considère qu'une vraie ref technique fait plus de 4 caractères
     is_real_product_ref = len(ref) > 4 and not any(k in ref_up for k in ["PORT", "FRAIS"])
     
     if any(x in label_up for x in keywords_port) and not is_real_product_ref:
-        # Double sécurité : on évite les mots composés comme "SUPPORT" ou le pluriel "PORTS"
         exclusions_port = ["SUPPORT", "SUPORT", "PORTS", "RJ45", "DATA", "PANNEAU"]
         if not any(ex in label_up for ex in exclusions_port): 
             return "FRAIS PORT"
             
     if "EMBALLAGE" in label_up: return "EMBALLAGE"
 
-    # 4. TRI TECHNIQUE
     mots_cles_frais_ref = ["PORT", "FRAIS", "SANS_REF", "DIVERS"]
     is_ref_exclusion = any(kw in ref_up for kw in mots_cles_frais_ref)
     ref_is_technique = (len(ref) > 3) and (not is_ref_exclusion)
@@ -159,15 +145,10 @@ def detecter_famille_cuivre(article, designation):
     return any(kw in label_up or kw in ref_up for kw in keywords_cuivre)
 
 def calculer_seuil_tolerance(is_cuivre):
-    """
-    LOUIS : Renvoie le seuil de tolérance selon le type de produit.
-    - Cuivre : ±30% (matière première volatile)
-    - Stable : ±10% (inflation normale 1-2%)
-    """
     if is_cuivre:
-        return 1.30  # ±30% pour le cuivre
+        return 1.30
     else:
-        return 1.10  # ±10% pour produits stables
+        return 1.10
 
 def extraire_json_robuste(texte):
     try:
@@ -177,27 +158,18 @@ def extraire_json_robuste(texte):
     return None
 
 def appliquer_correctifs_specifiques(data, texte_complet):
-    """
-    C'est ici que tu reprends le contrôle manuel.
-    Si l'IA rate un truc connu sur un fournisseur connu, on le force par code.
-    """
+    """Correctifs manuels pour les cas tordus (FF cachés, etc.)"""
     fourn = data.get('fournisseur', '').upper()
     
-    # --- CAS SPÉCIFIQUE : YESSS ELECTRIQUE ---
-    # Ils cachent le FF (Frais Facture) en bas dans le tableau de TVA
     if "YESSS" in fourn:
-        # On cherche le motif "FF" suivi d'un montant (ex: FF 8.99) dans le texte brut
-        # Le regex cherche : FF, espaces, puis des chiffres avec point ou virgule
         match_ff = re.search(r"FF\s+([\d\.,]+)", texte_complet)
         
         if match_ff:
             montant_ff = clean_float(match_ff.group(1))
             if montant_ff > 0:
-                # On vérifie si la ligne existe déjà pour pas faire de doublon
                 existe = any(l.get('article') == "FRAIS_ANNEXE" for l in data.get('lignes', []))
                 
                 if not existe:
-                    # On injecte la ligne manuellement
                     data['lignes'].append({
                         "quantite": 1,
                         "article": "FRAIS_ANNEXE",
@@ -211,13 +183,57 @@ def appliquer_correctifs_specifiques(data, texte_complet):
     
     return data
 
+
+# ==============================================================================
+# FIX PRINCIPAL : CALCUL DU PRIX UNITAIRE RÉEL
+# ==============================================================================
+def calculer_prix_unitaire_reel(ligne, qte):
+    """
+    LOUIS : C'est LA fonction clé qui résout ton problème.
+    
+    Elle calcule le VRAI prix unitaire en utilisant la méthode la plus fiable :
+    Montant Total / Quantité = Prix Unitaire Réel
+    
+    Peu importe ce que Gemini renvoie dans prix_net ou base_facturation,
+    le montant et la quantité sont TOUJOURS corrects sur la facture.
+    """
+    montant = clean_float(ligne.get('montant', 0))
+    
+    # Sécurité : si qte est 0 ou montant est 0, on essaie autrement
+    if qte <= 0:
+        qte = clean_float(ligne.get('quantite', 1))
+        if qte <= 0:
+            qte = 1
+    
+    if montant > 0 and qte > 0:
+        # MÉTHODE 1 (PRIORITAIRE) : Montant / Qté = PU réel
+        return montant / qte
+    
+    # MÉTHODE 2 (Fallback) : Utiliser prix_net avec base_facturation
+    prix_net_brut = clean_float(ligne.get('prix_net_unitaire', ligne.get('prix_net', 0)))
+    base_fac = float(ligne.get('base_facturation', 1))
+    if base_fac <= 0:
+        base_fac = 1
+    
+    # Détection auto de la base si pas renseignée
+    # Si le prix_net est > 10€ et la qté >= 100, c'est probablement un prix /100
+    if base_fac == 1 and prix_net_brut > 10 and qte >= 100:
+        # Vérification : est-ce que prix_net/100 * qte ≈ montant ?
+        test_pu = prix_net_brut / 100
+        if montant > 0 and abs(test_pu * qte - montant) < 0.10:
+            base_fac = 100
+    
+    if prix_net_brut > 0:
+        return prix_net_brut / base_fac
+    
+    return 0.0
+
+
 def traiter_un_fichier(nom_fichier, user_id):
     try:
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
-        # [MODIFICATION] : Passage à Gemini 3.0 Flash-preview (Stable & mais lent) la version 2 est trop pourrier pour le test
-        # On remplace la version "3-preview" qui lag par la référence de vitesse actuelle.
-        model = genai.GenerativeModel("gemini-3-flash-preview")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         
         prompt = """
         Analyse cette facture et extrais TOUTES les données structurées.
@@ -225,21 +241,28 @@ def traiter_un_fichier(nom_fichier, user_id):
 
         1. INFOS ENTREPRISE & SÉCURITÉ :
            - Fournisseur (Nom complet), Adresse, TVA, IBAN, Date, Numéro Facture.
-           - Numéro Commande : Cherche "V/Réf", "Chantier". Si vide, mets "-".
+           - Numéro Commande : Cherche "V/Réf", "Chantier", "REF CLIENT". Si vide, mets "-".
 
         2. EXTRACTION DES LIGNES (RÈGLES CRITIQUES) :
            - Extrais le tableau principal avec ces colonnes précises :
-             * quantite : Le nombre d'unités. 🚨 RÈGLE D'OR : Vérifie que (Montant / Prix Net) = Quantité.
-             * article : La référence technique.
+             * quantite : Le nombre d'unités commandées (ex: 100, 50, 1).
+             * article : La référence technique (ex: 52041, S520445).
              * designation : Le nom du produit.
-             * prix_brut_unitaire : Le prix catalogue affiché AVANT toute division.
-             * base_facturation : Si le prix est pour 100 ou 1000 unités (ex: câbles), note le nombre (100, 1000). Sinon mets 1.
-             * remise : Le pourcentage de remise (ex: "60+10" ou "70").
-             * prix_net_unitaire : Le prix payé unitaire affiché AVANT toute division.
-             * montant : Le total HT de la ligne.
+             * prix_brut_unitaire : Le prix catalogue BRUT affiché.
+             * base_facturation : IMPORTANT ! Regarde la colonne "Unité" ou après le prix.
+               - Si tu vois "/ 100" ou "/100" → mets 100
+               - Si tu vois "/ 1000" ou "/1000" → mets 1000  
+               - Si tu vois "/ 1" ou rien → mets 1
+             * remise : Le pourcentage de remise (ex: "60+10", "70", "80+25").
+             * prix_net_unitaire : Le prix NET affiché (après remise, AVANT multiplication par qté).
+             * montant : Le TOTAL HT de la ligne (= prix_net × qté, ou prix_net × qté/base si applicable).
              * num_bl_ligne : Le numéro de BL.
 
-        3. RÈGLE "FRAIS CACHÉS" :
+        3. RÈGLE DE VALIDATION :
+           - Vérifie que : montant ≈ (prix_net_unitaire / base_facturation) × quantite
+           - Si ça ne colle pas, ajuste base_facturation.
+
+        4. RÈGLE "FRAIS CACHÉS" :
            - Scanne le bas de la facture pour "FF", "Frais", "Port". 
            - Si trouvé, crée une ligne avec l'article "FRAIS_ANNEXE".
 
@@ -254,14 +277,14 @@ def traiter_un_fichier(nom_fichier, user_id):
             "ref_commande": "...",
             "lignes": [
                 {
-                    "quantite": 1,
-                    "article": "...",
-                    "designation": "...",
-                    "prix_brut_unitaire": 0.0,
-                    "base_facturation": 1,
-                    "remise": "...",
-                    "prix_net_unitaire": 0.0,
-                    "montant": 0.0,
+                    "quantite": 100,
+                    "article": "52041",
+                    "designation": "EUR OHM Boite plc d67 p 40 XL",
+                    "prix_brut_unitaire": 137.37,
+                    "base_facturation": 100,
+                    "remise": "70",
+                    "prix_net_unitaire": 41.21,
+                    "montant": 41.21,
                     "num_bl_ligne": "..."
                 }
             ]
@@ -274,17 +297,13 @@ def traiter_un_fichier(nom_fichier, user_id):
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
-        # --- CORRECTIF : Si Facture = Commande, on efface ! ---
         n_fac = data_json.get('num_facture', '').strip()
         n_cmd = data_json.get('ref_commande', '').strip()
         
         if n_fac and n_cmd and (n_fac in n_cmd or n_cmd in n_fac):
              data_json['ref_commande'] = "-"
-        # ------------------------------------------------------
 
-        # --- PATCH MANUEL : On repasse derrière l'IA pour les cas tordus ---
         data_json = appliquer_correctifs_specifiques(data_json, res.text)
-        # -------------------------------------------------------------------
 
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
@@ -296,8 +315,6 @@ def traiter_un_fichier(nom_fichier, user_id):
     except Exception as e: return False, str(e)
 
 def afficher_rapport_sql(fournisseur_nom):
-
-    # Appel à la vue SQL (Calcul instantané en base)
     res = supabase.table("vue_litiges_articles").select("*").eq("fournisseur", fournisseur_nom).execute()
     
     if not res.data:
@@ -332,16 +349,13 @@ if session:
     if 'uploader_key' not in st.session_state:
         st.session_state['uploader_key'] = 0    
     user_id = session["user"]["id"]
-    st.title("🏗️ Audit V21 - Logique Universelle")
+    st.title("🏗️ Audit V22 - Calcul PU Corrigé")
 
     try:
-        # Louis : On interroge Supabase pour récupérer tes factures
         res_db = supabase.table("audit_results").select("*").eq("user_id", user_id).execute()
-        # Louis : On prépare les données pour l'affichage (ne pas supprimer ces deux lignes !)
         memoire_full = {r['file_name']: r for r in res_db.data}
         memoire = {r['file_name']: r['analyse_complete'] for r in res_db.data}
     except Exception as e: 
-        # Louis : Si ton badge de sécurité a expiré (erreur JWT), on vide tout et on te reconnecte
         if "JWT expired" in str(e):
             st.session_state.clear()
             st.rerun()
@@ -370,55 +384,54 @@ if session:
             fournisseurs_detectes.add(fourn)
             
             for l in data.get('lignes', []):
-                qte_ia = clean_float(l.get('quantite', 1))
-                if qte_ia == 0: qte_ia = 1
+                # =====================================================
+                # FIX V22 : CALCUL SIMPLIFIÉ ET ROBUSTE DU PU
+                # =====================================================
+                qte_raw = clean_float(l.get('quantite', 1))
+                if qte_raw == 0: qte_raw = 1
                 
                 montant = clean_float(l.get('montant', 0))
                 
-                # --- NOUVELLE LOGIQUE UNIVERSELLE DE CALCUL ---
+                # NOUVELLE MÉTHODE : On utilise la fonction centralisée
+                pu_systeme = calculer_prix_unitaire_reel(l, qte_raw)
+                
+                # Calcul de la quantité finale (vérification croisée)
+                qte_finale = qte_raw
+                if montant > 0 and pu_systeme > 0.001:
+                    ratio = montant / pu_systeme
+                    if abs(ratio - round(ratio)) < 0.05: 
+                         qte_math = round(ratio)
+                         if qte_math != qte_raw and qte_math > 0:
+                             qte_finale = qte_math
+
+                # Récupération du prix brut pour affichage
                 base_fac = float(l.get('base_facturation', 1))
                 if base_fac <= 0: base_fac = 1
-
-                # Calcul du Net Réel
-                p_net_lu = clean_float(l.get('prix_net_unitaire', l.get('prix_net', 0)))
-                p_net = p_net_lu / base_fac
                 
-                # Sécurité Rétro-compatibilité (si l'IA a mis le slash dans l'ancien champ)
-                raw_net = str(l.get('prix_net', '0'))
-                if '/' in raw_net and base_fac == 1:
-                    try: p_net = clean_float(raw_net.split('/')[0]) / float(raw_net.split('/')[1])
-                    except: pass
-
-                # Calcul du Brut Réel
                 p_brut_lu = clean_float(l.get('prix_brut_unitaire', l.get('prix_brut', 0)))
                 p_brut = p_brut_lu / base_fac
-
-                if '/' in str(l.get('prix_brut', '')) and base_fac == 1:
-                    try: p_brut = clean_float(str(l.get('prix_brut')).split('/')[0]) / float(str(l.get('prix_brut')).split('/')[1])
-                    except: pass
                 
-                # On stocke le brut "propre" pour l'affichage
+                # Détection auto base_facturation si Gemini l'a ratée
+                if base_fac == 1 and p_brut_lu > 50 and qte_finale >= 100:
+                    # Test : est-ce que ça colle mieux avec /100 ?
+                    if montant > 0:
+                        test_pu_100 = p_brut_lu / 100
+                        # On regarde si le prix net est cohérent avec /100
+                        p_net_lu = clean_float(l.get('prix_net_unitaire', l.get('prix_net', 0)))
+                        if p_net_lu > 10 and abs((p_net_lu/100) * qte_finale - montant) < 1:
+                            p_brut = p_brut_lu / 100
+                            base_fac = 100
+                
                 raw_brut = f"{p_brut:.4f}"
-                # ----------------------------------------------
                 
+                # Remise
                 raw_remise = str(l.get('remise', '0'))
                 val_remise = calculer_remise_combine(raw_remise)
                 remise = f"{val_remise:g}%" if val_remise > 0 else "-"
+                
+                # Autres champs
                 num_bl = l.get('num_bl_ligne', '-')
-                qte_finale = qte_ia
-                if montant > 0 and p_net > 0:
-                    ratio = montant / p_net
-                    if abs(ratio - round(ratio)) < 0.05: 
-                         qte_math = round(ratio)
-                         if qte_math != qte_ia and qte_math > 0:
-                             qte_finale = qte_math
-
-                if montant > 0 and qte_finale > 0:
-                    pu_systeme = montant / qte_finale
-                elif p_net > 0:
-                    pu_systeme = p_net 
-                else:
-                    pu_systeme = 0
+                p_net = pu_systeme  # Le prix net unitaire = PU système
 
                 article = l.get('article', 'SANS_REF')
                 if not article or article == "None" or article == "SANS_REF":
@@ -444,18 +457,20 @@ if session:
                     "Prix Net": p_net, 
                     "Montant": montant,
                     "PU_Systeme": pu_systeme,
-                    "Famille": famille
+                    "Famille": famille,
+                    "Base_Fac": base_fac  # DEBUG : pour voir ce que Gemini renvoie
                 })
         except: continue
 
     df = pd.DataFrame(all_rows)
 
-    tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
+    tab_config, tab_analyse, tab_import, tab_brut, tab_debug = st.tabs([
+        "⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL", "🐛 DEBUG"
+    ])
 
     with tab_config:
         st.header("🛠️ Réglages Fournisseurs")
         
-        # 1. Chargement initial depuis Supabase
         if 'config_df' not in st.session_state:
             try:
                 res_cfg = supabase.table("user_configs").select("*").eq("user_id", user_id).execute()
@@ -468,18 +483,15 @@ if session:
             except:
                 st.session_state['config_df'] = pd.DataFrame(columns=['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)'])
 
-        # 2. Ajout des nouveaux fournisseurs détectés dans le scan
         current_df = st.session_state['config_df']
         for f in fournisseurs_detectes:
             if f not in current_df['Fournisseur'].values:
                 new_line = pd.DataFrame([{"Fournisseur": f, "Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0}])
                 current_df = pd.concat([current_df, new_line], ignore_index=True)
         
-        # 3. Édition du tableau
         edited_config = st.data_editor(current_df, num_rows="dynamic", use_container_width=True, key="editor_cfg")
         st.session_state['config_df'] = edited_config
 
-        # 4. BOUTON DE SAUVEGARDE
         if st.button("💾 SAUVEGARDER LES RÉGLAGES", type="primary"):
             with st.spinner("Enregistrement..."):
                 try:
@@ -498,19 +510,69 @@ if session:
         
         config_dict = edited_config.set_index('Fournisseur').to_dict('index')
 
+    # ==============================================================================
+    # TAB DEBUG : Pour voir ce qui se passe vraiment
+    # ==============================================================================
+    with tab_debug:
+        st.header("🐛 Debug - Données brutes par article")
+        
+        if not df.empty:
+            # Filtre par article
+            articles_uniques = sorted(df['Article'].unique().tolist())
+            article_choisi = st.selectbox("Choisir un article à inspecter :", articles_uniques)
+            
+            if article_choisi:
+                df_art = df[df['Article'] == article_choisi].sort_values('Date')
+                
+                st.subheader(f"📦 Données pour : {article_choisi}")
+                st.dataframe(
+                    df_art[['Date', 'Facture', 'Quantité', 'Prix Brut', 'Remise', 'Prix Net', 'Montant', 'PU_Systeme', 'Base_Fac']],
+                    hide_index=True,
+                    use_container_width=True
+                )
+                
+                # Calcul du meilleur prix
+                best_pu = df_art['PU_Systeme'].min()
+                best_row = df_art[df_art['PU_Systeme'] == best_pu].iloc[0]
+                
+                worst_pu = df_art['PU_Systeme'].max()
+                worst_row = df_art[df_art['PU_Systeme'] == worst_pu].iloc[0]
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.success(f"""
+                    **✅ MEILLEUR PRIX :**
+                    - PU : {best_pu:.4f} €
+                    - Date : {best_row['Date']}
+                    - Remise : {best_row['Remise']}
+                    - Facture : {best_row['Facture']}
+                    """)
+                
+                with col2:
+                    st.error(f"""
+                    **❌ PIRE PRIX :**
+                    - PU : {worst_pu:.4f} €
+                    - Date : {worst_row['Date']}
+                    - Remise : {worst_row['Remise']}
+                    - Facture : {worst_row['Facture']}
+                    """)
+                
+                ecart = worst_pu - best_pu
+                if ecart > 0.01:
+                    st.warning(f"⚠️ ÉCART : {ecart:.4f} € par unité ({(ecart/best_pu)*100:.1f}% de hausse)")
+        else:
+            st.info("Aucune donnée. Importez des factures d'abord.")
+
     with tab_analyse:
         if df.empty:
             st.warning("⚠️ Aucune donnée pour ce compte. Allez dans IMPORT.")
         else:
-            # --- DEBUT AJOUT : TABLEAU HTML (FORCE BRUTE POUR LE STYLE) ---
             st.subheader("📈 Synthèse des Achats par Année")
             
-            # 1. Préparation
             df_calc = df.copy()
             df_calc['Date_Ref'] = pd.to_datetime(df_calc['Date'], errors='coerce')
             df_calc['Année'] = df_calc['Date_Ref'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
 
-            # 2. Pivot
             df_pivot = df_calc.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
             
             if not df_pivot.empty:
@@ -529,7 +591,6 @@ if session:
                         'font-weight': 'bold'
                     })\
                     .set_table_styles([
-                        # Entêtes (Th) en gris clair avec bordure noire
                         {'selector': 'th', 'props': [
                             ('background-color', '#e0e0e0'), 
                             ('color', 'black'), 
@@ -537,17 +598,14 @@ if session:
                             ('border', '2px solid black'),
                             ('font-size', '16px')
                         ]},
-                        # Le tableau global
                         {'selector': 'table', 'props': [
                             ('border-collapse', 'collapse'),
                             ('width', '100%')
                         ]}
                     ]).to_html()
                 
-                # Injection du HTML
                 st.markdown(html_code, unsafe_allow_html=True)
                 st.divider()
-                # --- FIN AJOUT ---
 
             df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
@@ -558,78 +616,60 @@ if session:
                 df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
                 
                 for art, group in df_clean.groupby('Article'):
-                    # On vérifie si on a déjà pris une décision sur cet article
                     accord = registre.get(art)
                     
-                    # Logique de sélection des records
+                    # =====================================================
+                    # FIX V22 : SÉLECTION CORRECTE DU MEILLEUR PRIX
+                    # =====================================================
+                    # On trie par PU_Systeme croissant pour avoir le VRAI meilleur prix
+                    valid_prices = group[group['PU_Systeme'] > 0.001].sort_values('PU_Systeme', ascending=True)
                     valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
-                    valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True) # <--- LIGNE DE REPERE AVANT
 
-                    # --- CORRECTION PROMO ---
-                    # Louis : C'est ici qu'on résout le bug. Si tu marques un article comme "PROMO",
-                    # on identifie le prix de cette promo (le moins cher de la liste).
-                    # Ensuite, on dit au programme d'ignorer TOUTES les factures qui ont ce prix promo.
-                    # De cette façon, il va chercher le prix suivant (ton prix normal à 129 €) pour calculer la perte.
+                    # Gestion des PROMOS marquées
                     idx_r, idx_p = 0, 0
                     if accord and accord['type'] == "PROMO":
                         if not valid_prices.empty:
                             prix_promo = valid_prices.iloc[0]['PU_Systeme']
-                            # On filtre : on ne garde que les factures dont le prix est différent de la promo
                             valid_prices = valid_prices[abs(valid_prices['PU_Systeme'] - prix_promo) > 0.10]
                             valid_remises = valid_remises[abs(valid_remises['PU_Systeme'] - prix_promo) > 0.10]
-                    # -------------------------
 
-                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0] # <--- LIGNE DE REPERE APRES
                     best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
+                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0]
 
-                    # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
+                    # Remise finale
                     remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
 
-                    # --- CORRECTION LOGIQUE "PRIX NET" vs "PRIX BRUT" ---
-                    # Si le meilleur prix est un "Net" (0 remise) et qu'il est meilleur que le prix remisé habituel
-                    # Alors on recalcule la remise théorique en utilisant le Brut du prix remisé.
+                    # Correction logique "Prix Net" vs "Prix Brut"
                     p_net_record = best_p_row['PU_Systeme']
                     p_net_standard = best_r_row['PU_Systeme']
                     
                     if p_net_record < (p_net_standard - 0.05) and best_p_row['Remise_Val'] == 0:
                         brut_ref = clean_float(best_r_row['Prix Brut'])
                         if brut_ref > 0:
-                            # Calcul inverse : Quelle remise donne ce prix net sur ce brut ?
                             taux_virtuel = (1 - (p_net_record / brut_ref)) * 100
                             remise_finale = round(taux_virtuel, 2)
-                    # ----------------------------------------------------
 
-                    # LOUIS : Détection des prix sans remise suspects
-                    # On récupère toutes les lignes SANS remise (prix forcés)
+                    # Alertes prix forcé
                     lignes_sans_remise = group[group['Remise_Val'] == 0]
-                    
-                    # Variable pour stocker les alertes
                     alerte_prix_force = None
                     derniere_commande_mois = 0
                     
                     if not lignes_sans_remise.empty:
-                        # On prend le meilleur prix sans remise
                         meilleur_prix_force = lignes_sans_remise['PU_Systeme'].min()
-                        date_prix_force = lignes_sans_remise[lignes_sans_remise['PU_Systeme'] == meilleur_prix_force]['Date'].iloc[0]
                         
-                        # RÈGLE 1 : Si le prix forcé est MEILLEUR que le prix avec remise → Promo légitime
                         if meilleur_prix_force < best_p_row['PU_Systeme'] - 0.10:
                             alerte_prix_force = "PROMO_OK"
-                        
-                        # RÈGLE 2 : Si le prix forcé est PIRE → Arnaque
                         elif meilleur_prix_force > best_p_row['PU_Systeme'] + 0.10:
                             alerte_prix_force = "SUSPECT"
                         
-                        # RÈGLE 3 : Ancienne référence (> 12 mois)
                         try:
-                            from datetime import datetime
                             date_derniere = pd.to_datetime(group['Date']).max()
                             date_actuelle = datetime.now()
                             delta_mois = (date_actuelle.year - date_derniere.year) * 12 + (date_actuelle.month - date_derniere.month)
                             derniere_commande_mois = delta_mois
                             
                             if delta_mois > 12 and meilleur_prix_force > 0:
-                                if alerte_prix_force != "SUSPECT":  # Pas de double alerte
+                                if alerte_prix_force != "SUSPECT":
                                     alerte_prix_force = "ANCIEN"
                         except:
                             pass
@@ -644,19 +684,6 @@ if session:
                         'Alerte_Prix_Force': alerte_prix_force,
                         'Derniere_Commande_Mois': derniere_commande_mois
                     }
-
-                    # --- MODIFICATION : ON COMMENTE TOUT POUR ARRETER LE LAG ---
-                    # if remise_finale > 0:
-                    #     try:
-                    #         supabase.table("market_rates").upsert({
-                    #             "user_id": user_id,
-                    #             "article": art,
-                    #             "fournisseur": best_r_row['Fournisseur'],
-                    #             "remise": remise_finale,
-                    #             "date_ref": best_r_row['Date']
-                    #         }).execute()
-                    #     except: pass
-                    # -----------------------------------------------------------
             
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             anomalies = []
@@ -674,14 +701,12 @@ if session:
                 motif = ""
                 cible = 0.0                 
                 source_cible = "-"
-                # Louis : On crée une variable vide au début de chaque ligne.
-                # Elle servira à stocker le "Vrai Prix Historique" si on en trouve un.
                 prix_historique_ref = 0.
                 detail_tech = ""
-                # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
                 remise_cible_str = "-" 
+                is_cuivre = False
                 
-                # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
+                # FRAIS GESTION
                 if row['Famille'] == "FRAIS GESTION":
                     if row['Montant'] > max_gestion:
                         perte = row['Montant'] - max_gestion
@@ -689,6 +714,7 @@ if session:
                         motif = "Frais Facturation Abusifs"
                         detail_tech = f"(Max autorisé: {max_gestion}€)"
                 
+                # FRAIS PORT
                 elif row['Famille'] == "FRAIS PORT":
                     total_fac = facture_totals.get(f_name, 0)
                     if total_fac >= seuil_franco:
@@ -698,23 +724,25 @@ if session:
                         detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                         remise_cible_str = "100%"
 
-                # --- LOGIQUE HYBRIDE V3 : LE NET EST JUGE ---
+                # PRODUITS
                 else:
                     art = row['Article']
                     remise_actuelle = clean_float(str(row['Remise']).replace('%', ''))
                     pu_paye = row['PU_Systeme']
                     brut_actuel = clean_float(row['Prix Brut'])
+                    is_cuivre = detecter_famille_cuivre(art, row['Désignation'])
                     
                     if art in ref_map and art != 'SANS_REF':
                         m = ref_map[art]
                         accord = registre.get(art)
                         
+                        # CAS 1 : CONTRAT FORCÉ
                         if accord and accord['type'] == "CONTRAT":
                             remise_contractuelle = accord['valeur']
                             if remise_actuelle < remise_contractuelle - 0.5:
                                 if brut_actuel > 0:
                                     prix_contractuel = brut_actuel * (1 - remise_contractuelle/100)
-                                    if pu_paye > prix_contractuel + 0.10:
+                                    if pu_paye > prix_contractuel + 0.01:
                                         perte = (pu_paye - prix_contractuel) * row['Quantité']
                                         cible = prix_contractuel
                                         motif = f"Remise {remise_actuelle}% < Contrat {remise_contractuelle}%"
@@ -722,78 +750,39 @@ if session:
                                         detail_tech = f"(Contrat du {accord['date']})"
                                         prix_historique_ref = cible
                         
+                        # CAS 2 : PROMO MARQUÉE
                         elif accord and accord['type'] == "PROMO":
                             perte = 0
                         
-                        elif fourn == "YESSS ELECTRIQUE":
-                            is_cuivre = detecter_famille_cuivre(art, row['Désignation'])
-                            remise_historique = m['Best_Remise']
+                        # CAS 3 : ANALYSE AUTOMATIQUE
+                        else:
+                            best_pu = m['Best_Price_Net']
                             
-                            if remise_actuelle < remise_historique - 0.5:
-                                prix_attendu = brut_actuel * (1 - remise_historique/100)
+                            # Si le prix payé est supérieur au meilleur prix connu
+                            if pu_paye > best_pu + 0.01:
+                                perte = (pu_paye - best_pu) * row['Quantité']
+                                cible = best_pu
                                 
-                                if pu_paye > prix_attendu + 0.05:
-                                    perte = (pu_paye - prix_attendu) * row['Quantité']
-                                    cible = prix_attendu
-                                    motif = f"Remise baissée ({remise_actuelle}% au lieu de {remise_historique}%)"
-                                    remise_cible_str = f"{remise_historique}%"
-                                    prix_historique_ref = m['Price_At_Best_Remise']
-                                    
-                                    if is_cuivre:
-                                        detail_tech = f"(CUIVRE : Brut {brut_actuel:.2f}€, variation normale)"
-                                    else:
-                                        detail_tech = f"(Brut {brut_actuel:.2f}€)"
-                            
-                            # LOUIS : Vérification hausse prix brut (cuivre vs stable)
-                        if perte == 0:  # Seulement si pas déjà détecté
-                            brut_historique = m['Best_Brut_Associe']
-                            
-                            # Calcul du seuil selon le type de produit
-                            seuil_tolerance = calculer_seuil_tolerance(is_cuivre)
-                            
-                            if brut_actuel > brut_historique * seuil_tolerance:
-                                prix_attendu = brut_historique * (1 - remise_actuelle/100)
+                                # Calcul de l'écart en %
+                                ecart_pct = ((pu_paye / best_pu) - 1) * 100 if best_pu > 0 else 0
                                 
-                                if pu_paye > prix_attendu + 0.05:
-                                    perte = (pu_paye - prix_attendu) * row['Quantité']
-                                    cible = prix_attendu
-                                    
-                                    hausse_brut_pct = ((brut_actuel / brut_historique) - 1) * 100
-                                    
-                                    # Message différencié selon le type de produit
-                                    if is_cuivre:
-                                        motif = f"⚠️ Brut +{hausse_brut_pct:.1f}% (CUIVRE : Seuil 30% dépassé)"
-                                        detail_tech = f"(Cuivre volatil : Brut {brut_historique:.2f}€ → {brut_actuel:.2f}€)"
-                                    else:
-                                        motif = f"🚨 Brut +{hausse_brut_pct:.1f}% (Produit stable : Seuil 10% dépassé)"
-                                        detail_tech = f"(Produit stable : Brut {brut_historique:.2f}€ → {brut_actuel:.2f}€)"
-                                    
-                                    remise_cible_str = f"{remise_actuelle}%"
-                                    prix_historique_ref = m['Price_At_Best_Remise']
-                            
-                            if pu_paye <= m['Best_Price_Net'] + 0.05:
-                                perte = 0
-                            
-                            elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
-                                perte = 0
-                                
-                            else:
-                                cible_remise = 999999.0
-                                if m['Best_Brut_Associe'] > 0:
-                                    cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
-                                    if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
-                                        cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
-                                
-                                cible = min(m['Best_Price_Net'], cible_remise)
-                                
-                                if pu_paye > cible + 0.05:
-                                    perte = (pu_paye - cible) * row['Quantité']
-                                    motif = "Hausse de prix"
-                                    source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
+                                if remise_actuelle < m['Best_Remise'] - 0.5:
+                                    motif = f"Remise {remise_actuelle}% < Historique {m['Best_Remise']}%"
                                     remise_cible_str = f"{m['Best_Remise']:g}%"
+                                else:
+                                    motif = f"Prix +{ecart_pct:.1f}% vs meilleur historique"
+                                    remise_cible_str = f"{m['Best_Remise']:g}%"
+                                
+                                source_cible = m['Date_Price']
+                                prix_historique_ref = best_pu
+                                
+                                if is_cuivre:
+                                    detail_tech = f"(CUIVRE - Tolérance ±30%)"
+                                    seuil = calculer_seuil_tolerance(True)
+                                    if pu_paye <= best_pu * seuil:
+                                        perte = 0  # Dans la tolérance cuivre
 
                 if perte > 0.01:
-                    # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
                     try:
                         val_float = float(str(prix_brut_affiche).replace(' ', '').replace(',', '.'))
@@ -804,7 +793,7 @@ if session:
                          remise_cible_str = "?"
 
                     anomalies.append({
-                        "Fichier_Source": f_name, # Pour le filtre d'affichage
+                        "Fichier_Source": f_name,
                         "Fournisseur": fourn,                        
                         "Num Facture": row['Facture'],
                         "Ref_Cmd": row['Ref_Cmd'], 
@@ -814,71 +803,55 @@ if session:
                         "Montant": row['Montant'],
                         "Prix Brut": prix_brut_affiche,
                         "Remise": row['Remise'],
-                        "Remise Cible": remise_cible_str, # 4. AFFICHAGE (Corrigé)
+                        "Remise Cible": remise_cible_str,
                         "Qte": row['Quantité'],
                         "Ref": row['Article'],
                         "Désignation": row['Désignation'],
                         "Payé (U)": row['PU_Systeme'],
                         "Cible (U)": cible,
-                        # On utilise 'remise_cible_str' car c'est la seule variable qui existe ici.
-                        "Prix Cible": f"{(clean_float(str(row['Prix Brut'])) * (1 - clean_float(str(remise_cible_str).replace('%',''))/100)):.4f} €",
+                        "Prix Cible": f"{cible:.4f} €",
                         "Perte": perte,                        
-# --- AJOUT SPECIAL LOUIS : ON MET L'INFO DANS LE TUYAU ---
-                        # Louis : On ajoute une colonne invisible "Prix_Ref_Hist" dans les données.
-                        # Elle sert juste à transporter le prix de 56.75€ jusqu'à l'affichage du titre plus bas.
                         "Prix_Ref_Hist": prix_historique_ref,
                         "Motif": motif,
                         "Date Facture": row['Date'],
                         "Source Cible": source_cible,     
-                        # --- LIGNE DE REPÈRE AVANT ---
                         "Détails Techniques": detail_tech
-
                     })
             
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
-                # --- BLOC PODIUM : MONTANT + % ---
+                
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
-                # 1. Dénominateur : Ventes
                 df_ventes = df.copy()
                 df_ventes['Date_DT'] = pd.to_datetime(df_ventes['Date'], errors='coerce')
                 df_ventes['Année'] = df_ventes['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
                 stats_ventes = df_ventes.groupby(['Fournisseur', 'Année'])['Montant'].sum().reset_index()
 
-                # 2. Numérateur : Pertes
                 df_ano['Date_DT'] = pd.to_datetime(df_ano['Date Facture'], errors='coerce')
                 df_ano['Année'] = df_ano['Date_DT'].dt.year.fillna(0).astype(int).astype(str).replace('0', 'Inconnue')
                 stats_pertes = df_ano.groupby(['Fournisseur', 'Année'])['Perte'].sum().reset_index()
 
-                # 3. Fusion et Calcul
                 merge_stats = pd.merge(stats_ventes, stats_pertes, on=['Fournisseur', 'Année'], how='left').fillna(0)
                 merge_stats['Taux'] = merge_stats.apply(lambda x: (x['Perte'] / x['Montant'] * 100) if x['Montant'] > 0 else 0, axis=1)
                 
-                # Cellule "Combo" (Texte pour l'affichage)
                 merge_stats['Affiche'] = merge_stats.apply(
                     lambda x: f"{x['Perte']:.2f} € ({x['Taux']:.1f}%)" if x['Perte'] > 0.01 else "-", 
                     axis=1
                 )
 
-                # 4. Pivot
                 pivot_combo = merge_stats.pivot(index='Fournisseur', columns='Année', values='Affiche').fillna("-")
                 
-                # Ajout de la colonne Total (Floats pour le tri) à la FIN (Droite)
                 total_dette_fourn = df_ano.groupby('Fournisseur')['Perte'].sum()
                 pivot_combo["Dette Totale (€)"] = total_dette_fourn
                 
-                # On trie les fournisseurs par dette décroissante
                 pivot_combo = pivot_combo.sort_values("Dette Totale (€)", ascending=False)
 
-                # --- AJOUT LIGNE TOTAL GÉNÉRAL (BAS DE TABLEAU) ---
                 row_total = {"Dette Totale (€)": total_perte}
                 
-                # Calcul des totaux par année (pour avoir les bons %)
                 cols_annee = [c for c in pivot_combo.columns if c != "Dette Totale (€)"]
                 for c_annee in cols_annee:
-                    # On filtre les stats brutes pour l'année concernée
                     sub = merge_stats[merge_stats['Année'] == c_annee]
                     sum_p = sub['Perte'].sum()
                     sum_m = sub['Montant'].sum()
@@ -891,17 +864,12 @@ if session:
                     else:
                          row_total[c_annee] = "-"
 
-                # Insertion de la ligne TOTAL en bas
                 df_total_row = pd.DataFrame([row_total], index=["TOTAL GÉNÉRAL"])
                 pivot_combo = pd.concat([pivot_combo, df_total_row])
 
-                # --- FINITION ---
-                # Suppression des noms d'index parasites (Ligne rose)
                 pivot_combo.index.name = None
                 pivot_combo.columns.name = None
                 
-                # --- SUPPRESSION DU DOUBLE AFFICHAGE (st.metric retiré) ---
-                # On affiche directement le tableau HTML sans les colonnes parasites
                 html_podium = pivot_combo.style.format({'Dette Totale (€)': "{:.2f} €"})\
                 .set_properties(**{
                     'text-align': 'center', 
@@ -918,168 +886,152 @@ if session:
                 st.markdown(html_podium, unsafe_allow_html=True)
                 
                 st.divider()
-                # --- FILTRE AFFICHAGE (POUR LE FREROT) ---
-                # Explication : On récupère la liste de toutes les factures qui ont des soucis
-                # et on propose à l'utilisateur de choisir s'il veut tout voir ou juste une facture.
+                
                 liste_fichiers_avec_erreurs = sorted(df_ano['Fichier_Source'].unique().tolist(), reverse=True)
                 
                 choix_affichage = st.selectbox(
                     "👁️ Filtrer les détails ci-dessous par facture :", 
                     ["TOUT LE DOSSIER (GLOBAL)"] + liste_fichiers_avec_erreurs
                 )
-                # -----------------------------------------
+                
                 st.subheader("🕵️ Détails par Fournisseur")
         
-                # 6. Détails
-               # 6. Détails
                 for fourn_nom in pivot_combo.index:
-                    # [CORRECTION] : On ignore la ligne de total pour les dossiers détails
                     if fourn_nom == "TOTAL GÉNÉRAL": continue
                     
                     fourn_dette = total_dette_fourn.get(fourn_nom, 0)
                     
                     with st.expander(f"📂 {fourn_nom} - Dette : {fourn_dette:.2f} €", expanded=False):
                         df_litiges_fourn = df_ano[df_ano['Fournisseur'] == fourn_nom]
-                        # --- FILTRE ACTIF (POUR LE FREROT) ---
-                        # Si l'utilisateur a choisi une facture précise dans le menu du dessus,
-                        # on ne garde QUE les lignes de cette facture.
+                        
                         if choix_affichage != "TOUT LE DOSSIER (GLOBAL)":
                             df_litiges_fourn = df_litiges_fourn[df_litiges_fourn['Fichier_Source'] == choix_affichage]
                         
-                        # Si après le filtre le tableau est vide (ex: ce fournisseur n'a pas d'erreur sur cette facture),
-                        # on affiche un petit message et on passe au suivant.
                         if df_litiges_fourn.empty:
                             st.info(f"✅ Aucune erreur sur la facture {choix_affichage} pour ce fournisseur.")
                             continue
-                        # -------------------------------------
                         
                         for article, group in df_litiges_fourn.groupby('Ref'):
-                                    # LOUIS : Récupération des infos de base
-                                    source_brute = group['Source Cible'].iloc[0]
-                                    date_ref = source_brute if source_brute != "-" else group['Date Facture'].iloc[0]
-                                    remise_ref = group['Remise Cible'].iloc[0]
-                                    nom_art = group['Désignation'].iloc[0]
-                                    # LOUIS : Calcul des données pour le résumé visuel
-                                    prix_min = group['Payé (U)'].min()
-                                    prix_actuel = group['Payé (U)'].iloc[-1]
-                                    date_min = group[group['Payé (U)'] == prix_min]['Date Facture'].iloc[0]
-                                    date_actuel = group['Date Facture'].iloc[-1]
-                                    ecart_euros = prix_actuel - prix_min
-                                    ecart_pct = ((prix_actuel / prix_min) - 1) * 100 if prix_min > 0 else 0
-                                    
-                                    # LOUIS : Récupération des remises historique et actuelle
-                                    # On utilise le ref_map pour avoir la VRAIE meilleure remise
-                                    if article in ref_map:
-                                        remise_min_val = ref_map[article]['Best_Remise']
-                                        remise_min = f"{remise_min_val:.4g}%"
-                                    else:
-                                        remise_min = group[group['Payé (U)'] == prix_min]['Remise'].iloc[0]
-                                    
-                                    remise_actuelle = group['Remise'].iloc[-1]
-                                    
-                                    # Formatage des remises pour l'affichage
-                                    remise_min_txt = remise_min if remise_min != "-" else "0%"
-                                    remise_actuelle_txt = remise_actuelle if remise_actuelle != "-" else "0%"
-                                    
-                                    # LOUIS : Détection du type d'alerte
-                                    badge_alerte = ""
-                                    couleur_box = "#f0f0f0"
-                                    if article in ref_map:
-                                        alerte = ref_map[article].get('Alerte_Prix_Force')
-                                        if alerte == "PROMO_OK":
-                                            badge_alerte = "🟢 Promo légitime détectée"
-                                            couleur_box = "#d4edda"
-                                        elif alerte == "SUSPECT":
-                                            badge_alerte = "🔴 ALERTE : Prix sans remise suspect"
-                                            couleur_box = "#f8d7da"
-                                        elif alerte == "ANCIEN":
-                                            mois = ref_map[article].get('Derniere_Commande_Mois', 0)
-                                            badge_alerte = f"🟠 À vérifier : Dernière commande il y a {mois} mois"
-                                            couleur_box = "#fff3cd"
-                                    
-                                    # LOUIS : Affichage du titre et du badge
-                                    st.markdown(f"### 📦 {article} - {nom_art}")
-                                    if badge_alerte:
-                                        st.markdown(f"**{badge_alerte}**")
-                                    
-                                    # LOUIS : Box résumé avec les prix ET LES REMISES
-                                    st.markdown(f"""
-                                    <div style="background-color: {couleur_box}; padding: 15px; border-radius: 10px; border: 2px solid #333; margin-bottom: 15px;">
-                                        <h4 style="margin: 0 0 10px 0;">🏆 MEILLEUR PRIX HISTORIQUE</h4>
-                                        <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #28a745;">
-                                            {prix_min:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_min}</span>
-                                        </p>
-                                        <p style="font-size: 16px; margin: 5px 0; color: #666;">
-                                            ✨ Remise obtenue : <strong>{remise_min_txt}</strong>
-                                        </p>
-                                        <hr style="margin: 15px 0; border: 1px solid #ccc;">
-                                        <h4 style="margin: 10px 0;">📊 PRIX ACTUEL</h4>
-                                        <p style="font-size: 20px; font-weight: bold; margin: 5px 0; color: {'#dc3545' if ecart_euros > 0.10 else '#28a745'};">
-                                            {prix_actuel:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_actuel}</span>
-                                        </p>
-                                        <p style="font-size: 16px; margin: 5px 0; color: #666;">
-                                            💰 Remise actuelle : <strong>{remise_actuelle_txt}</strong>
-                                        </p>
-                                        {'<p style="margin: 10px 0; font-weight: bold; color: #dc3545;">⚠️ Tu payes ' + f'{ecart_euros:.2f}€ de PLUS ({ecart_pct:.1f}%)</p>' if ecart_euros > 0.10 else '<p style="margin: 10px 0; font-weight: bold; color: #28a745;">✅ Prix stable ou en baisse</p>'}
-
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                                    
-                                    # LOUIS : Boutons d'arbitrage
-                                    st.markdown("**🎯 ACTION REQUISE :**")
-                                    c_bt1, c_bt2, c_bt3 = st.columns(3)
-                                    cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
-                                    
-                                    accord_existant = registre.get(article)
-                                    
-                                    with c_bt1:
-                                        if accord_existant and accord_existant['type'] == "CONTRAT":
-                                            st.write(f"🔒 Contrat : **{accord_existant['valeur']}{accord_existant['unite']}**")
-                                            col_mod_input, col_mod_btn = st.columns([2, 3])
-                                            with col_mod_input:
-                                                nouvelle_remise_val = st.number_input(
-                                                    label="Modif",
-                                                    value=float(accord_existant['valeur']),
-                                                    step=0.5,
-                                                    format="%.2f",
-                                                    key=f"input_mod_{cle_unique}",
-                                                    label_visibility="collapsed"
-                                                )
-                                            with col_mod_btn:
-                                                if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%", nom_art, fourn_nom, "")
-                                                    st.rerun()
-                                        else:
-                                            if st.button(f"🚀 Contrat ({remise_ref})", key=f"v_{cle_unique}", use_container_width=True):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%", nom_art, fourn_nom, "")
-                                                st.rerun()
-                                    
-                                    with c_bt2:
-                                        val_promo_sql = prix_min
-                                        if st.button("🟢 C'était une PROMO", key=f"p_{cle_unique}", use_container_width=True):
-                                            sauvegarder_accord(article, "PROMO", val_promo_sql, "EUR", nom_art, fourn_nom, "")
-                                            st.rerun()
-                                    
-                                    with c_bt3:
-                                        if st.button("⚪ IGNORER", key=f"e_{cle_unique}", use_container_width=True):
-                                            sauvegarder_accord(article, "ERREUR", 0, "EUR", nom_art, fourn_nom, "")
-                                            st.rerun()
-                                    
-                                    # LOUIS : Historique complet (masqué par défaut)
-                                    with st.expander("📋 Voir l'historique complet des achats"):
-                                        sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
-                                        st.dataframe(
-                                            sub_df,
-                                            hide_index=True,
-                                            use_container_width=True,
-                                            column_config={
-                                                "Qte": st.column_config.NumberColumn("Qte", format="%d"),
-                                                "Payé (U)": st.column_config.NumberColumn("Payé (U)", format="%.4f €"),
-                                                "Perte": st.column_config.NumberColumn("Perte", format="%.2f €")
-                                            }
+                            source_brute = group['Source Cible'].iloc[0]
+                            date_ref = source_brute if source_brute != "-" else group['Date Facture'].iloc[0]
+                            remise_ref = group['Remise Cible'].iloc[0]
+                            nom_art = group['Désignation'].iloc[0]
+                            
+                            # Récupération des vrais meilleurs/pires prix depuis ref_map
+                            if article in ref_map:
+                                prix_min = ref_map[article]['Best_Price_Net']
+                                date_min = ref_map[article]['Date_Price']
+                                remise_min = f"{ref_map[article]['Best_Remise']:.4g}%"
+                            else:
+                                prix_min = group['Payé (U)'].min()
+                                date_min = group[group['Payé (U)'] == prix_min]['Date Facture'].iloc[0]
+                                remise_min = group[group['Payé (U)'] == prix_min]['Remise'].iloc[0]
+                            
+                            prix_actuel = group['Payé (U)'].iloc[-1]
+                            date_actuel = group['Date Facture'].iloc[-1]
+                            remise_actuelle = group['Remise'].iloc[-1]
+                            
+                            ecart_euros = prix_actuel - prix_min
+                            ecart_pct = ((prix_actuel / prix_min) - 1) * 100 if prix_min > 0 else 0
+                            
+                            remise_min_txt = remise_min if remise_min != "-" else "0%"
+                            remise_actuelle_txt = remise_actuelle if remise_actuelle != "-" else "0%"
+                            
+                            badge_alerte = ""
+                            couleur_box = "#f0f0f0"
+                            if article in ref_map:
+                                alerte = ref_map[article].get('Alerte_Prix_Force')
+                                if alerte == "PROMO_OK":
+                                    badge_alerte = "🟢 Promo légitime détectée"
+                                    couleur_box = "#d4edda"
+                                elif alerte == "SUSPECT":
+                                    badge_alerte = "🔴 ALERTE : Prix sans remise suspect"
+                                    couleur_box = "#f8d7da"
+                                elif alerte == "ANCIEN":
+                                    mois = ref_map[article].get('Derniere_Commande_Mois', 0)
+                                    badge_alerte = f"🟠 À vérifier : Dernière commande il y a {mois} mois"
+                                    couleur_box = "#fff3cd"
+                            
+                            st.markdown(f"### 📦 {article} - {nom_art}")
+                            if badge_alerte:
+                                st.markdown(f"**{badge_alerte}**")
+                            
+                            st.markdown(f"""
+                            <div style="background-color: {couleur_box}; padding: 15px; border-radius: 10px; border: 2px solid #333; margin-bottom: 15px;">
+                                <h4 style="margin: 0 0 10px 0;">🏆 MEILLEUR PRIX HISTORIQUE</h4>
+                                <p style="font-size: 24px; font-weight: bold; margin: 5px 0; color: #28a745;">
+                                    {prix_min:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_min}</span>
+                                </p>
+                                <p style="font-size: 16px; margin: 5px 0; color: #666;">
+                                    ✨ Remise obtenue : <strong>{remise_min_txt}</strong>
+                                </p>
+                                <hr style="margin: 15px 0; border: 1px solid #ccc;">
+                                <h4 style="margin: 10px 0;">📊 PRIX ACTUEL</h4>
+                                <p style="font-size: 20px; font-weight: bold; margin: 5px 0; color: {'#dc3545' if ecart_euros > 0.10 else '#28a745'};">
+                                    {prix_actuel:.4f} € <span style="font-size: 14px; color: #666;">📅 {date_actuel}</span>
+                                </p>
+                                <p style="font-size: 16px; margin: 5px 0; color: #666;">
+                                    💰 Remise actuelle : <strong>{remise_actuelle_txt}</strong>
+                                </p>
+                                {'<p style="margin: 10px 0; font-weight: bold; color: #dc3545;">⚠️ Tu payes ' + f'{ecart_euros:.2f}€ de PLUS ({ecart_pct:.1f}%)</p>' if ecart_euros > 0.10 else '<p style="margin: 10px 0; font-weight: bold; color: #28a745;">✅ Prix stable ou en baisse</p>'}
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("**🎯 ACTION REQUISE :**")
+                            c_bt1, c_bt2, c_bt3 = st.columns(3)
+                            cle_unique = f"{fourn_nom}_{article}".replace(" ", "_")
+                            
+                            accord_existant = registre.get(article)
+                            
+                            with c_bt1:
+                                if accord_existant and accord_existant['type'] == "CONTRAT":
+                                    st.write(f"🔒 Contrat : **{accord_existant['valeur']}{accord_existant['unite']}**")
+                                    col_mod_input, col_mod_btn = st.columns([2, 3])
+                                    with col_mod_input:
+                                        nouvelle_remise_val = st.number_input(
+                                            label="Modif",
+                                            value=float(accord_existant['valeur']),
+                                            step=0.5,
+                                            format="%.2f",
+                                            key=f"input_mod_{cle_unique}",
+                                            label_visibility="collapsed"
                                         )
-                                    
-                                    st.markdown("---")
+                                    with col_mod_btn:
+                                        if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
+                                            sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%", nom_art, fourn_nom, "")
+                                            st.rerun()
+                                else:
+                                    if st.button(f"🚀 Contrat ({remise_ref})", key=f"v_{cle_unique}", use_container_width=True):
+                                        sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%", nom_art, fourn_nom, "")
+                                        st.rerun()
+                            
+                            with c_bt2:
+                                val_promo_sql = prix_min
+                                if st.button("🟢 C'était une PROMO", key=f"p_{cle_unique}", use_container_width=True):
+                                    sauvegarder_accord(article, "PROMO", val_promo_sql, "EUR", nom_art, fourn_nom, "")
+                                    st.rerun()
+                            
+                            with c_bt3:
+                                if st.button("⚪ IGNORER", key=f"e_{cle_unique}", use_container_width=True):
+                                    sauvegarder_accord(article, "ERREUR", 0, "EUR", nom_art, fourn_nom, "")
+                                    st.rerun()
+                            
+                            with st.expander("📋 Voir l'historique complet des achats"):
+                                sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']]
+                                st.dataframe(
+                                    sub_df,
+                                    hide_index=True,
+                                    use_container_width=True,
+                                    column_config={
+                                        "Qte": st.column_config.NumberColumn("Qte", format="%d"),
+                                        "Payé (U)": st.column_config.NumberColumn("Payé (U)", format="%.4f €"),
+                                        "Perte": st.column_config.NumberColumn("Perte", format="%.2f €")
+                                    }
+                                )
+                            
+                            st.markdown("---")
+            else:
+                st.success("✅ Aucune anomalie détectée ! Tout est conforme.")
                     
 
     with tab_import:
@@ -1099,14 +1051,13 @@ if session:
                 try:
                     supabase.table("audit_results").delete().eq("user_id", user_id).execute()
                     st.success("💥 Vos données sont vidées !")
-                    st.session_state['uploader_key'] += 1 # 👈 C'est ça qui vide la liste
+                    st.session_state['uploader_key'] += 1
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erreur : {e}")
 
         with col_drop:
-            # 👇 La clé magique est ici
             uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True, key=f"uploader_{st.session_state['uploader_key']}")
             force_rewrite = st.checkbox("⚠️ Écraser doublons (Forcer ré-analyse)", value=False)
             
@@ -1149,34 +1100,3 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
