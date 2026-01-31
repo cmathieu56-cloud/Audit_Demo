@@ -649,6 +649,18 @@ if session:
                         # REGLE 2 : RESPECT DE LA REMISE (Thermor)
                         elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
                             perte = 0
+                        
+                        # REGLE 2.5 : TOLERANCE HAUSSE ANNUELLE
+                        # Si même remise (±0.5 point) et brut augmente de max 5%, on tolère
+                        elif m['Best_Remise'] > 0 and abs(remise_actuelle - m['Best_Remise']) <= 0.5:
+                            brut_actuel = clean_float(row['Prix Brut'])
+                            brut_ref = m['Best_Brut_Associe']
+                            if brut_ref > 0:
+                                hausse_brut = ((brut_actuel / brut_ref) - 1) * 100
+                                if 0 <= hausse_brut <= 5:
+                                    perte = 0
+                        
+                        # REGLE 3 : CALCUL DE LA PERTE
                             
                         # REGLE 3 : CALCUL DE LA PERTE
                         else:
@@ -667,7 +679,9 @@ if session:
                                 source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
                                 remise_cible_str = f"{m['Best_Remise']:g}%"
 
-                if perte > 0.01:
+                # Seuil 3% : on ignore le bruit (arrondis, écotaxe)
+                ecart_pourcent = (perte / (cible * row['Quantité'])) * 100 if (cible > 0 and row['Quantité'] > 0) else 0
+                if perte > 0.01 and ecart_pourcent >= 3:
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
                     try:
