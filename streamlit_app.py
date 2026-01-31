@@ -248,9 +248,6 @@ def traiter_un_fichier(nom_fichier, user_id):
         # ------------------------------------------------------
 
         # --- PATCH MANUEL : On repasse derrière l'IA pour les cas tordus ---
-        data_json = appliquer_correctifs_specifiques(data_json, res.text)
-        # -------------------------------------------------------------------
-
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
             "user_id": user_id,
@@ -1003,4 +1000,5 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
