@@ -97,7 +97,11 @@ def detecter_famille(label, ref=""):
         return "TAXE"
 
     # 2. FRAIS DE GESTION (C'est ici qu'on attrape le FF et le FRAIS_ANNEXE)
-    if "FRAIS_ANNEXE" in ref_up: return "FRAIS GESTION"
+    if "FRAIS_ANNEXE" in ref_up:
+        desig_up = label_up
+        if any(x in desig_up for x in ["DEEE", "ECO", "RECYCL", "SORECOP"]):
+            return "TAXE"
+        return "FRAIS GESTION"
     
     if label_up.strip() == "FF" or "FF " in label_up or " FF" in label_up:
         return "FRAIS GESTION"
@@ -1000,5 +1004,6 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
