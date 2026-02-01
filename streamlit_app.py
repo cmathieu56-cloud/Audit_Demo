@@ -180,6 +180,48 @@ def appliquer_correctifs_specifiques(data, texte_complet):
     
     return data
 
+def prompt_avoir():
+    """Louis : Prompt dédié pour les avoirs (retours + corrections prix)"""
+    return """
+    Analyse cette facture d'AVOIR et extrais les données structurées.
+    
+    IMPORTANT : Identifie le TYPE d'avoir :
+    - "RETOUR" : Simple retour de marchandise (pas de "Prix avant" / "Prix après")
+    - "CORRECTION" : Révision de prix (contient "Prix avant" et "Prix après")
+    
+    RÈGLES :
+    - Si c'est un RETOUR : extrais les lignes normalement avec montants négatifs
+    - Si c'est une CORRECTION : pour chaque ligne extrais le "Prix après" (nouvelle remise)
+    - Le champ "type_avoir" doit être "RETOUR" ou "CORRECTION"
+    - Le champ "facture_origine" = le numéro de facture corrigée si visible
+    
+    JSON ATTENDU :
+    {
+        "fournisseur": "...",
+        "adresse_fournisseur": "...",
+        "tva_fournisseur": "...",
+        "iban": "...",
+        "date": "2025-01-01",
+        "num_facture": "...",
+        "type_avoir": "RETOUR ou CORRECTION",
+        "facture_origine": "...",
+        "lignes": [
+            {
+                "quantite": 1,
+                "article": "...",
+                "designation": "...",
+                "prix_brut_unitaire": 0.0,
+                "base_facturation": 1,
+                "remise_avant": "...",
+                "remise_apres": "...",
+                "prix_net_avant": 0.0,
+                "prix_net_apres": 0.0,
+                "montant": 0.0
+            }
+        ]
+    }
+    """
+
 def traiter_un_fichier(nom_fichier, user_id):
     try:
         path_storage = f"{user_id}/{nom_fichier}"
@@ -1048,6 +1090,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
