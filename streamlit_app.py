@@ -576,7 +576,11 @@ if session:
                     tous_bruts = group[group['PU_Systeme'] > 0.01].copy()
                     tous_bruts['Brut_Float'] = tous_bruts['Prix Brut'].apply(clean_float)
                     tous_bruts['Annee'] = pd.to_datetime(tous_bruts['Date'], errors='coerce').dt.year
-                    bruts_valides = tous_bruts[tous_bruts['Brut_Float'] > 0].sort_values('Annee')
+                    # Louis : On exclut les prix forcés (remise 0% où brut = net) car c'est pas le vrai brut catalogue
+                    bruts_valides = tous_bruts[(tous_bruts['Brut_Float'] > 0) & (tous_bruts['Remise_Val'] > 0)].sort_values('Annee')
+                    # Si aucune ligne avec remise, on garde tout comme avant
+                    if bruts_valides.empty:
+                        bruts_valides = tous_bruts[tous_bruts['Brut_Float'] > 0].sort_values('Annee')
                     
                     if not bruts_valides.empty:
                         brut_le_plus_bas = bruts_valides.iloc[0]['Brut_Float']
@@ -1044,6 +1048,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
