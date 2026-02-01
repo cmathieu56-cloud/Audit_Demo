@@ -907,7 +907,7 @@ if session:
                     filtre_ok = perte > 0.01 and ecart_pourcent >= 3
                 else:
                     filtre_ok = perte > 0.01
-                if filtre_ok::
+                if filtre_ok:
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
                     try:
@@ -1269,6 +1269,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
