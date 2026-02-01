@@ -412,6 +412,52 @@ def traiter_un_fichier(nom_fichier, user_id):
             "analyse_complete": json.dumps(data_json),
             "raw_text": res.text
        }, on_conflict="file_name,user_id").execute()
+        
+        # Louis : On éclate le JSON en lignes dans la table SQL
+        type_doc = data_json.get('type_avoir', 'FACTURE')
+        fac_origine = data_json.get('facture_origine', '')
+        fournisseur = data_json.get('fournisseur', '')
+        num_fac = data_json.get('num_facture', '')
+        date_fac = data_json.get('date', '')
+        
+        # On supprime les anciennes lignes de ce fichier avant de réinsérer
+        supabase.table("lignes_factures").delete().eq("user_id", user_id).eq("fichier", nom_fichier).execute()
+        
+        for l in data_json.get('lignes', []):
+            ref = l.get('article', '')
+            desig = l.get('designation', '')
+            qte = clean_float(str(l.get('quantite', 1)))
+            brut = clean_float(str(l.get('prix_brut_unitaire', 0)))
+            base = clean_float(str(l.get('base_facturation', 1)))
+            if base <= 0: base = 1
+            remise_str = str(l.get('remise', '0'))
+            remise_v = clean_float(remise_str.replace('%', '').split('+')[0])
+            pnu = clean_float(str(l.get('prix_net_unitaire', l.get('prix_net', 0))))
+            mont = clean_float(str(l.get('montant', 0)))
+            bl = l.get('num_bl_ligne', '')
+            famille = detecter_famille(ref, desig)
+            
+            supabase.table("lignes_factures").insert({
+                "user_id": user_id,
+                "fichier": nom_fichier,
+                "num_facture": num_fac,
+                "date_facture": date_fac,
+                "fournisseur": fournisseur,
+                "type_document": type_doc,
+                "facture_origine": fac_origine,
+                "article": ref,
+                "designation": desig,
+                "quantite": qte,
+                "prix_brut": brut,
+                "base_facturation": base,
+                "remise": remise_str,
+                "remise_val": remise_v,
+                "prix_net": pnu / base if base > 1 else pnu,
+                "montant": mont,
+                "num_bl": bl,
+                "famille": famille
+            }).execute()
+        
         return True, "OK"
     except Exception as e: return False, str(e)
 
@@ -1269,6 +1315,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
