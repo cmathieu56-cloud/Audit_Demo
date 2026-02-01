@@ -58,11 +58,11 @@ def generer_pdf_facture(num_facture, date_facture, fournisseur, anomalies_factur
             str(a.get('Article', '')),
             Paragraph(str(a.get('Designation', ''))[:40], style_cell),
             str(a.get('Qte', '')),
-            f"{a.get('Prix Brut', 0):.2f}",
+            f"{clean_float(str(a.get('Prix Brut', 0))):.2f}",
             str(a.get('Remise', '')),
-            f"{a.get('Payé (U)', 0):.2f}",
-            f"{a.get('Prix Cible', 0):.2f}",
-            f"{a.get('Perte', 0):.2f}"
+            f"{clean_float(str(a.get('Payé (U)', 0))):.2f}",
+            f"{clean_float(str(a.get('Prix Cible', 0))):.2f}",
+            f"{clean_float(str(a.get('Perte', 0))):.2f}"
         ])
     
     # Ligne total
@@ -1232,6 +1232,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
