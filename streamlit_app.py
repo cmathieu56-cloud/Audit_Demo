@@ -1040,6 +1040,31 @@ if session:
                         if df_litiges_fourn.empty:
                             st.info(f"✅ Aucune erreur sur la facture {choix_affichage} pour ce fournisseur.")
                             continue
+                        # --- BOUTON EXPORT PDF ---
+                        anomalies_pour_pdf = []
+                        for _, row_pdf in df_litiges_fourn.iterrows():
+                            anomalies_pour_pdf.append({
+                                'Article': row_pdf.get('Ref', ''),
+                                'Designation': row_pdf.get('Désignation', ''),
+                                'Qte': row_pdf.get('Qte', 1),
+                                'Prix Brut': row_pdf.get('Prix Brut', 0),
+                                'Remise': row_pdf.get('Remise', ''),
+                                'Payé (U)': row_pdf.get('Payé (U)', 0),
+                                'Prix Cible': row_pdf.get('Prix Cible', 0),
+                                'Perte': row_pdf.get('Perte', 0)
+                            })
+                        total_perte_pdf = df_litiges_fourn['Perte'].sum()
+                        date_fac_pdf = df_litiges_fourn['Date Facture'].iloc[0] if 'Date Facture' in df_litiges_fourn.columns else ""
+                        num_fac_pdf = choix_affichage if choix_affichage != "TOUT LE DOSSIER (GLOBAL)" else "GLOBAL"
+                        
+                        pdf_bytes = generer_pdf_facture(num_fac_pdf, date_fac_pdf, fourn_nom, anomalies_pour_pdf, total_perte_pdf)
+                        st.download_button(
+                            label="📄 Exporter PDF",
+                            data=pdf_bytes,
+                            file_name=f"anomalies_{fourn_nom}_{num_fac_pdf}.pdf",
+                            mime="application/pdf",
+                            key=f"pdf_{fourn_nom}_{num_fac_pdf}"
+                        )
                         # -------------------------------------
                         for article, group in df_litiges_fourn.groupby('Ref'):
                                     # On ne récupère plus le prix_ref pour l'affichage
@@ -1207,6 +1232,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
