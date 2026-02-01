@@ -684,12 +684,33 @@ if session:
                     # -----------------------------------------------------------
             
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
+            
+            # Louis : On récupère les factures corrigées par un avoir CORRECTION
+            # Pour ne pas compter la perte 2 fois (facture originale + avoir)
+            articles_corriges = {}  # {num_facture_origine: [liste d'articles corrigés]}
+            for f_name_av, json_str_av in memoire.items():
+                try:
+                    data_av = json.loads(json_str_av)
+                    if data_av.get('type_avoir') == "CORRECTION":
+                        fac_orig = data_av.get('facture_origine', '')
+                        if fac_orig:
+                            if fac_orig not in articles_corriges:
+                                articles_corriges[fac_orig] = []
+                            for l_av in data_av.get('lignes', []):
+                                articles_corriges[fac_orig].append(l_av.get('article', ''))
+                except:
+                    continue
+            
             anomalies = []
 
             for idx, row in df.iterrows():
                 f_name = row['Fichier']
                 num_facture = row['Facture']
                 fourn = row['Fournisseur']
+                
+                # Louis : Si cette ligne a été corrigée par un avoir, on la saute
+                if num_facture in articles_corriges and row['Article'] in articles_corriges[num_facture]:
+                    continue
                 
                 rules = config_dict.get(fourn, {"Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0})
                 seuil_franco = rules.get("Franco (Seuil €)", 0.0)
@@ -1116,6 +1137,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
