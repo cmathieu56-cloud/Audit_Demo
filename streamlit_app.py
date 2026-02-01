@@ -281,7 +281,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         # Louis : On fait un premier appel rapide pour voir si c'est un avoir
         # Si le nom du fichier contient un montant négatif (ex: -27_04) c'est probablement un avoir
-        is_avoir = "-" in nom_fichier.split("_")[-1].replace(".pdf", "") or "-" in nom_fichier.split("_")[-2] if "_" in nom_fichier else False
+        is_avoir = bool(re.search(r"-\d", nom_fichier))
         
         if is_avoir:
             res = model.generate_content([prompt_avoir(), {"mime_type": "application/pdf", "data": file_data}])
@@ -1097,6 +1097,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
