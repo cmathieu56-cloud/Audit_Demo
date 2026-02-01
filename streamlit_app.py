@@ -881,8 +881,13 @@ if session:
                                             txt_prix_cible = ""
                                     except:
                                         txt_prix_cible = ""
-
-                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_prix_cible} (Vu le {date_ref})")
+                                    # Louis : On affiche le brut de réf pour que Marcel voit sur quelle base la remise s'applique
+                                    try:
+                                        brut_ref_affiche = group['Brut Réf'].iloc[0]
+                                        txt_brut = f" (Brut Réf: **{brut_ref_affiche:.2f} €**)" if brut_ref_affiche > 0 else ""
+                                    except:
+                                        txt_brut = ""
+                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_brut}{txt_prix_cible} (Vu le {date_ref})")
                                     
                                     # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
@@ -1025,6 +1030,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
