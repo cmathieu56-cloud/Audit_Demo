@@ -291,7 +291,26 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
-
+        
+        # Louis : Si c'est un avoir CORRECTION, on transforme les lignes
+        # pour que le "prix après" devienne la référence dans le système
+        if data_json.get('type_avoir') == "CORRECTION":
+            lignes_converties = []
+            for l in data_json.get('lignes', []):
+                lignes_converties.append({
+                    "quantite": abs(l.get('quantite', 1)),
+                    "article": l.get('article', ''),
+                    "designation": l.get('designation', ''),
+                    "prix_brut_unitaire": l.get('prix_brut_unitaire', 0),
+                    "base_facturation": l.get('base_facturation', 1),
+                    "remise": l.get('remise_apres', l.get('remise', '0')),
+                    "prix_net_unitaire": l.get('prix_net_apres', l.get('prix_net_unitaire', 0)),
+                    "montant": abs(l.get('prix_net_apres', 0)) * abs(l.get('quantite', 1)),
+                    "num_bl_ligne": "AVOIR_CORRECTION"
+                })
+            data_json['lignes'] = lignes_converties
+            data_json['ref_commande'] = data_json.get('facture_origine', '-')
+        
         # --- CORRECTIF : Si Facture = Commande, on efface ! ---
         n_fac = data_json.get('num_facture', '').strip()
         n_cmd = data_json.get('ref_commande', '').strip()
@@ -1097,6 +1116,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
