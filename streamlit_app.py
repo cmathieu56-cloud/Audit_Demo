@@ -584,6 +584,8 @@ if session:
                     ref_map[art] = {
                         'Best_Remise': remise_finale,
                         'Best_Brut_Associe': brut_le_plus_bas if brut_le_plus_bas > 0 else clean_float(best_r_row['Prix Brut']),
+                        # Louis : Le brut du jour où on a eu le meilleur prix net (pour prouver le gonflage)
+                        'Brut_Du_Best_Price': clean_float(best_p_row['Prix Brut']),
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
@@ -883,7 +885,7 @@ if session:
                                         txt_prix_cible = ""
                                     # Louis : On affiche le brut de réf pour que Marcel voit sur quelle base la remise s'applique
                                     try:
-                                        brut_ref_affiche = group['Brut Réf'].iloc[0]
+                                        brut_ref_affiche = ref_map.get(article, {}).get('Brut_Du_Best_Price', 0)
                                         txt_brut = f" (Brut Réf: **{brut_ref_affiche:.2f} €**)" if brut_ref_affiche > 0 else ""
                                     except:
                                         txt_brut = ""
@@ -1030,6 +1032,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
