@@ -558,12 +558,18 @@ if session:
                     p_net_standard = best_r_row['PU_Systeme']
                     
                     if p_net_record < (p_net_standard - 0.05) and best_p_row['Remise_Val'] == 0:
-                        brut_ref = clean_float(best_r_row['Prix Brut'])
+                        # Louis : Le meilleur prix a remise 0% (prix forcé type 19.58€)
+                        # On cherche le VRAI brut sur les autres factures qui ONT une remise
+                        lignes_avec_remise = group[group['Remise_Val'] > 0]
+                        if not lignes_avec_remise.empty:
+                            brut_ref = clean_float(lignes_avec_remise.iloc[0]['Prix Brut'])
+                        else:
+                            brut_ref = clean_float(best_r_row['Prix Brut'])
                         if brut_ref > 0:
                             # Calcul inverse : Quelle remise donne ce prix net sur ce brut ?
                             taux_virtuel = (1 - (p_net_record / brut_ref)) * 100
-                            remise_finale = round(taux_virtuel, 2)
-                    # ----------------------------------------------------
+                            remise_finale = round(taux_virtuel, 2)                  
+                    
 
                     # Louis : On cherche le brut le plus bas, mais on accepte +5% d'une année à l'autre
                     # Comme ça dans 3 ans on a toujours un brut réf à jour
@@ -1032,6 +1038,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
