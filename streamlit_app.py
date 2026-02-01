@@ -565,9 +565,15 @@ if session:
                             remise_finale = round(taux_virtuel, 2)
                     # ----------------------------------------------------
 
+                    # Louis : Best_Brut = le brut le plus BAS historique (le vrai prix catalogue)
+                    # C'est lui qui prouve que YESSS gonfle le brut quand ils veulent t'enfumer
+                    tous_bruts = group[group['PU_Systeme'] > 0.01].copy()
+                    tous_bruts['Brut_Float'] = tous_bruts['Prix Brut'].apply(clean_float)
+                    brut_le_plus_bas = tous_bruts[tous_bruts['Brut_Float'] > 0]['Brut_Float'].min() if not tous_bruts.empty else 0
+
                     ref_map[art] = {
                         'Best_Remise': remise_finale,
-                        'Best_Brut_Associe': clean_float(best_r_row['Prix Brut']),
+                        'Best_Brut_Associe': brut_le_plus_bas if brut_le_plus_bas > 0 else clean_float(best_r_row['Prix Brut']),
                         'Best_Price_Net': best_p_row['PU_Systeme'],
                         'Price_At_Best_Remise': best_r_row['PU_Systeme'],
                         'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
@@ -1009,6 +1015,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
