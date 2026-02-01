@@ -289,7 +289,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
         if not res.text: return False, "Vide"
         
-        data_json = extraire_json_robuste(res.text))
+        data_json = extraire_json_robuste(res.text)
         if not data_json: return False, "JSON Invalide"
 
         # --- CORRECTIF : Si Facture = Commande, on efface ! ---
@@ -1097,6 +1097,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
