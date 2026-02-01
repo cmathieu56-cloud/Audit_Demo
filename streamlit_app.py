@@ -217,7 +217,7 @@ def detecter_famille(label, ref=""):
     
     if ref_is_technique:
         if any(x in label_up for x in ["CLIM", "PAC", "POMPE A CHALEUR", "SPLIT"]): return "CLIM / PAC"
-        if any(x in label_up for x in ["CABLE", "FIL ", "COURONNE", "U1000", "R2V"]): return "CABLAGE"
+        if any(x in label_up for x in ["CABLE", "FIL ", "COURONNE", "U1000", "R2V", "AR2V"]): return "CABLAGE"
         if any(x in label_up for x in ["COLASTIC", "MASTIC", "CHIMIQUE", "COLLE"]): return "CONSOMMABLE"
         return "AUTRE_PRODUIT"
     
@@ -1249,6 +1249,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
