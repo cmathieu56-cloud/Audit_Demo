@@ -1044,6 +1044,8 @@ if session:
                         anomalies_pour_pdf = []
                         for _, row_pdf in df_litiges_fourn.iterrows():
                             anomalies_pour_pdf.append({
+                                'Facture': row_pdf.get('Num Facture', ''),
+                                'Date': row_pdf.get('Date Facture', ''),
                                 'Article': row_pdf.get('Ref', ''),
                                 'Designation': row_pdf.get('Désignation', ''),
                                 'Qte': row_pdf.get('Qte', 1),
@@ -1232,6 +1234,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
