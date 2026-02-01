@@ -1078,7 +1078,8 @@ if session:
         with col_info:
             st.write("📂 **En mémoire (Compte actuel) :**")
             if memoire:
-                st.dataframe(pd.DataFrame({"Fichiers": list(memoire.keys())}), hide_index=True, height=300)
+                # Louis : J'ai ajouté sorted() autour de la liste pour que tes fichiers soient rangés par ordre alphabétique (A->Z)
+                st.dataframe(pd.DataFrame({"Fichiers": sorted(list(memoire.keys()))}), hide_index=True, height=300)
             else:
                 st.info("Vide")
             
@@ -1137,6 +1138,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
