@@ -325,7 +325,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             "user_id": user_id,
             "analyse_complete": json.dumps(data_json),
             "raw_text": res.text
-       }).execute()
+       }, on_conflict="file_name,user_id").execute()
         return True, "OK"
     except Exception as e: return False, str(e)
 
@@ -1137,6 +1137,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
