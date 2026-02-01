@@ -1131,13 +1131,15 @@ if session:
     with tab_brut:
         st.header("🔍 Scan total des documents")
         if memoire_full:
-            choix_file = st.selectbox("Choisir un fichier pour voir le scan complet :", list(memoire_full.keys()))
+            # Louis : J'ajoute sorted() ici aussi pour que ta liste déroulante soit bien rangée de A à Z
+            choix_file = st.selectbox("Choisir un fichier pour voir le scan complet :", sorted(list(memoire_full.keys())))                       
             if choix_file:
                 st.subheader(f"Texte brut extrait de : {choix_file}")
                 raw_txt = memoire_full[choix_file].get('raw_text', 'Aucun scan disponible')
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
