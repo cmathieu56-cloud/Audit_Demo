@@ -279,10 +279,17 @@ def traiter_un_fichier(nom_fichier, user_id):
         }
         """
         
-        res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
+        # Louis : On fait un premier appel rapide pour voir si c'est un avoir
+        # Si le nom du fichier contient un montant négatif (ex: -27_04) c'est probablement un avoir
+        is_avoir = "-" in nom_fichier.split("_")[-1].replace(".pdf", "") or "-" in nom_fichier.split("_")[-2] if "_" in nom_fichier else False
+        
+        if is_avoir:
+            res = model.generate_content([prompt_avoir(), {"mime_type": "application/pdf", "data": file_data}])
+        else:
+            res = model.generate_content([prompt, {"mime_type": "application/pdf", "data": file_data}])
         if not res.text: return False, "Vide"
         
-        data_json = extraire_json_robuste(res.text)
+        data_json = extraire_json_robuste(res.text))
         if not data_json: return False, "JSON Invalide"
 
         # --- CORRECTIF : Si Facture = Commande, on efface ! ---
@@ -1090,6 +1097,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
