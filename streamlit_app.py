@@ -22,6 +22,76 @@ try:
     genai.configure(api_key=GEMINI_API_KEY)
 except Exception as e:
     st.error(f"Erreur connexion : {e}") 
+def generer_pdf_facture(num_facture, date_facture, fournisseur, anomalies_facture, total_perte, nom_entreprise="SARL CEDRIC MATHIEU"):
+    """Louis : Génère un PDF propre pour envoyer au commercial"""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from io import BytesIO
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Style personnalisé
+    style_titre = ParagraphStyle('Titre', parent=styles['Title'], fontSize=16, spaceAfter=6)
+    style_sous = ParagraphStyle('Sous', parent=styles['Normal'], fontSize=10, textColor=colors.grey)
+    style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10)
+    
+    # EN-TETE
+    story.append(Paragraph(nom_entreprise, style_titre))
+    story.append(Paragraph("RAPPORT D'ANOMALIES TARIFAIRES", styles['Heading2']))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Fournisseur : <b>{fournisseur}</b>", styles['Normal']))
+    story.append(Paragraph(f"Facture : <b>{num_facture}</b> du <b>{date_facture}</b>", styles['Normal']))
+    story.append(Spacer(1, 12))
+    
+    # TABLEAU
+    header = ['Article', 'Designation', 'Qte', 'Brut', 'Remise', 'Paye', 'Cible', 'Perte']
+    data_table = [header]
+    
+    for a in anomalies_facture:
+        data_table.append([
+            str(a.get('Article', '')),
+            Paragraph(str(a.get('Designation', ''))[:40], style_cell),
+            str(a.get('Qte', '')),
+            f"{a.get('Prix Brut', 0):.2f}",
+            str(a.get('Remise', '')),
+            f"{a.get('Payé (U)', 0):.2f}",
+            f"{a.get('Prix Cible', 0):.2f}",
+            f"{a.get('Perte', 0):.2f}"
+        ])
+    
+    # Ligne total
+    data_table.append(['', '', '', '', '', '', 'TOTAL', f"{total_perte:.2f}"])
+    
+    col_widths = [55, 120, 25, 45, 45, 45, 45, 45]
+    t = Table(data_table, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTSIZE', (0, 0), (-1, 0), 8),
+        ('FONTSIZE', (0, 1), (-1, -1), 7),
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f0f0f0')]),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e74c3c')),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.white),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+    ]))
+    story.append(t)
+    
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(f"Dette totale sur cette facture : <b>{total_perte:.2f} EUR HT</b>", styles['Heading3']))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Document genere automatiquement - Audit tarifaire", style_sous))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 def charger_registre(user_id=None):
     """Louis : On récupère l'accord, sa valeur et son unité (EUR ou %) depuis Supabase - CLOISONNÉ par user"""
@@ -1137,6 +1207,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
