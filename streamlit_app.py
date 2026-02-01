@@ -845,9 +845,22 @@ if session:
                         # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
                         prix_historique_ref = m['Price_At_Best_Remise']
                         
+                        # REGLE 0 : HAUSSE VALIDEE
+                        # Louis : Si on a validé une hausse annuelle, le nouveau prix devient la référence
+                        if accord and accord['type'] == "HAUSSE":
+                            prix_hausse = clean_float(str(accord['valeur']))
+                            if prix_hausse > 0 and pu_paye <= prix_hausse + 0.05:
+                                perte = 0
+                            elif prix_hausse > 0 and pu_paye > prix_hausse + 0.05:
+                                perte = (pu_paye - prix_hausse) * row['Quantité']
+                                motif = "Hausse de prix"
+                                cible = prix_hausse
+                                source_cible = accord['date']
+                                remise_cible_str = f"{prix_hausse:.2f}€"
+                        
                         # REGLE 1 : SECURITE ABSOLUE (Berner)
                         # Si on paye le prix record ou moins, perte = 0
-                        if pu_paye <= m['Best_Price_Net'] + 0.05:
+                        elif pu_paye <= m['Best_Price_Net'] + 0.05:
                             perte = 0
                         
                         # REGLE 2 : RESPECT DE LA REMISE (Thermor)
@@ -867,35 +880,34 @@ if session:
                            
                         # REGLE 3 : CALCUL DE LA PERTE
                         else:
-                            # On cherche la meilleure cible possible entre le prix record et la remise théorique
-                            cible_remise = 999999.0
-                            brut_facture = clean_float(row['Prix Brut'])
-                            if m['Best_Brut_Associe'] > 0:
-                                # Louis : Si le brut facture est quasi = au prix net (prix forcé, remise 0%)
-                                # alors on utilise le brut réf pour calculer la cible, pas le brut bidon
-                                remise_ligne = clean_float(str(row['Remise']).replace('%', ''))
-                                if remise_ligne == 0 and brut_facture > 0:
-                                    cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
+                            # Louis : 2 logiques selon la famille
+                            # CABLAGE = on compare la REMISE (brut bouge avec cours cuivre)
+                            # TOUT LE RESTE = on compare le PRIX NET (brut manipulable)
+                            
+                            if row['Famille'] == "CABLAGE":
+                                brut_facture = clean_float(row['Prix Brut'])
+                                if m['Best_Remise'] > 0 and brut_facture > 0:
+                                    cible = brut_facture * (1 - m['Best_Remise']/100)
                                 else:
-                                    cible_remise = brut_facture * (1 - m['Best_Remise']/100)
-                                    if (brut_facture / m['Best_Brut_Associe']) < 0.5:
-                                        cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
-                            
-                            cible = min(m['Best_Price_Net'], cible_remise)
-                            
-                            if pu_paye > cible + 0.05:
-                                perte = (pu_paye - cible) * row['Quantité']
-                                motif = "Hausse de prix"
-                                source_cible = m['Date_Price'] if m['Best_Price_Net'] < cible_remise else m['Date_Remise']
+                                    cible = m['Best_Price_Net']
+                                source_cible = m['Date_Remise']
                                 remise_cible_str = f"{m['Best_Remise']:g}%"
-
-                # Seuil 3% : on ignore le bruit (arrondis, écotaxe) - SAUF frais et port
-                if row['Famille'] in ["FRAIS GESTION", "FRAIS PORT"]:
-                    filtre_ok = perte > 0.01
-                else:
+                            else:
+                                cible = m['Best_Price_Net']
+                                source_cible = m['Date_Price']
+                                remise_cible_str = f"{m['Best_Price_Net']:.2f}€"
+                            
+                            if pu_paye > cible + 0.01:
+                                perte = (pu_paye - cible) * row['Quantité']
+                                motif = "Hausse de prix"                
+                # Louis : On garde le seuil 3% uniquement pour CABLAGE (arrondis cours cuivre)
+                # Tout le reste : on détecte TOUT, même 0.02€
+                if row['Famille'] == "CABLAGE":
                     ecart_pourcent = (perte / (cible * row['Quantité'])) * 100 if (cible > 0 and row['Quantité'] > 0) else 0
                     filtre_ok = perte > 0.01 and ecart_pourcent >= 3
-                if filtre_ok:
+                else:
+                    filtre_ok = perte > 0.01
+                if filtre_ok::
                     # --- Nettoyage Affichage Prix Brut ---
                     prix_brut_affiche = row['Prix Brut']
                     try:
@@ -1160,6 +1172,14 @@ if session:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                             sauvegarder_accord(article, "ERREUR", 0, "EUR", user_id)
                                             st.rerun()
+                                    # Louis : Bouton hausse annuelle - valide le nouveau prix comme référence
+                                    if row['Famille'] != "CABLAGE":
+                                        c_bt4 = st.columns([1])[0]
+                                        with c_bt4:
+                                            best_net = ref_map.get(article, {}).get('Best_Price_Net', 0)
+                                            if st.button(f"📈 Hausse annuelle (valider {group['Payé (U)'].iloc[0]:.2f}€)", key=f"h_{cle_unique}"):
+                                                sauvegarder_accord(article, "HAUSSE", clean_float(str(group['Payé (U)'].iloc[0])), "EUR", user_id)
+                                                st.rerun()
 
                                     # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Prix Brut', 'Brut Réf', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']] 
@@ -1249,6 +1269,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
