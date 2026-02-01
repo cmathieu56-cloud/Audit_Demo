@@ -23,25 +23,26 @@ try:
 except Exception as e:
     st.error(f"Erreur connexion : {e}") 
 
-def charger_registre():
-    """Louis : On récupère l'accord, sa valeur et son unité (EUR ou %) depuis Supabase"""
+def charger_registre(user_id=None):
+    """Louis : On récupère l'accord, sa valeur et son unité (EUR ou %) depuis Supabase - CLOISONNÉ par user"""
     try:
-        # On lit la table SQL 'accords_commerciaux'
-        res = supabase.table("accords_commerciaux").select("*").execute()
-        # On stocke maintenant l'unité dans le dictionnaire pour que l'IA sache quoi comparer
+        query = supabase.table("accords_commerciaux").select("*")
+        if user_id:
+            query = query.eq("user_id", user_id)
+        res = query.execute()
         return {r['article']: {'type': r['type_accord'], 'valeur': r['valeur'], 'unite': r['unite'], 'date': r['date_maj']} for r in res.data}
     except:
         return {}
 
-def sauvegarder_accord(article, type_accord, valeur, unite="EUR"):
-    """Louis : On enregistre la valeur ET l'unité (EUR ou %) pour ne plus faire de calculs à la toto"""
+def sauvegarder_accord(article, type_accord, valeur, unite="EUR", user_id=None):
+    """Louis : On enregistre la valeur ET l'unité - CLOISONNÉ par user"""
     try:
-        # On utilise 'upsert' pour mettre à jour la ligne avec la nouvelle colonne 'unite'
         supabase.table("accords_commerciaux").upsert({
             "article": article,
             "type_accord": type_accord,
             "valeur": valeur,
             "unite": unite,
+            "user_id": user_id,
             "date_maj": datetime.now().strftime("%Y-%m-%d"),
             "modifie_par": "Système"
         }).execute()
@@ -585,7 +586,7 @@ if session:
 
             df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
             ref_map = {}
-            registre = charger_registre()
+            registre = charger_registre(user_id)
             
             if not df_produits.empty:
                 df_clean = df_produits[df_produits['Article'] != 'SANS_REF'].copy()
@@ -1025,14 +1026,13 @@ if session:
                                             with col_mod_btn:
                                                 if st.button(f"💾 Valider {nouvelle_remise_val}%", key=f"btn_mod_{cle_unique}"):
                                                     # On met à jour le contrat avec l'unité % par défaut
-                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%")
+                                                    sauvegarder_accord(article, "CONTRAT", nouvelle_remise_val, "%", user_id)
                                                     st.rerun()
                                         else:
                                             # Louis : Si c'est libre, on propose de verrouiller la remise cible calculée par l'IA.
                                             if st.button(f"🚀 Verrouiller Contrat ({remise_ref})", key=f"v_{cle_unique}"):
-                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%")
+                                                sauvegarder_accord(article, "CONTRAT", clean_float(remise_ref.replace('%','')), "%", user_id)
                                                 st.rerun()
-
                                     with c_bt2:
                                         # Louis : On décide intelligemment si on stocke un % (YESSS) ou un prix Net (EUR).
                                         val_promo_sql = clean_float(remise_ref.replace('%',''))
@@ -1041,14 +1041,12 @@ if session:
                                         if val_promo_sql <= 0:
                                             val_promo_sql = val_hist
                                             unite_promo_sql = "EUR"
-
                                         if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
-                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql)
+                                            sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql, user_id)
                                             st.rerun()
-
                                     with c_bt3:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
-                                            sauvegarder_accord(article, "ERREUR", 0, "EUR")
+                                            sauvegarder_accord(article, "ERREUR", 0, "EUR", user_id)
                                             st.rerun()
 
                                     # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
@@ -1139,6 +1137,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
