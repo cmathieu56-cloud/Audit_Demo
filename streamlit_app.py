@@ -64,7 +64,7 @@ def generer_pdf_facture(num_facture, date_facture, fournisseur, anomalies_factur
             row_data.append(Paragraph(str(a.get('Facture', '')), style_cell))
             row_data.append(str(a.get('Date', ''))[:10])
         row_data.extend([
-            str(a.get('Article', '')),
+            Paragraph(str(a.get('Article', '')), style_cell),
             Paragraph(str(a.get('Designation', ''))[:40], style_cell),
             str(a.get('Qte', '')),
             f"{clean_float(str(a.get('Prix Brut', 0))):.2f}",
@@ -1249,6 +1249,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
