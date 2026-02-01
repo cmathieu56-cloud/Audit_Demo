@@ -592,7 +592,7 @@ if session:
                 df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
                 
                 for art, group in df_clean.groupby('Article'):
-                    # On vérifie si Marcel a déjà pris une décision sur cet article
+                    # On vérifie si on a déjà pris une décision sur cet article
                     accord = registre.get(art)
                     
                     # Logique de sélection des records
@@ -988,7 +988,7 @@ if session:
                                             txt_prix_cible = ""
                                     except:
                                         txt_prix_cible = ""
-                                    # Louis : On affiche le brut de réf pour que Marcel voit sur quelle base la remise s'applique
+                                    # Louis : On affiche le brut de réf pour qu'il voit sur quelle base la remise s'applique
                                     try:
                                         brut_ref_affiche = ref_map.get(article, {}).get('Brut_Du_Best_Price', 0)
                                         txt_brut = f" (Brut Réf: **{brut_ref_affiche:.2f} €**)" if brut_ref_affiche > 0 else ""
@@ -996,7 +996,7 @@ if session:
                                         txt_brut = ""
                                     st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_brut}{txt_prix_cible} (Vu le {date_ref})")
                                     
-                                    # --- INTERFACE D'ARBITRAGE MARCEL (CORRECTIF CLÉ UNIQUE) ---
+                                    # --- INTERFACE D'ARBITRAGE(CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
                                     # On crée une clé unique en combinant Fournisseur + Article
                                     # Cela empêche l'erreur "DuplicateKey" si une ref existe chez 2 fournisseurs
@@ -1137,6 +1137,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
