@@ -684,17 +684,23 @@ if session:
                                 hausse_brut = ((brut_actuel / brut_ref) - 1) * 100
                                 if 0 <= hausse_brut <= 5:
                                     perte = 0
-                        
-                        # REGLE 3 : CALCUL DE LA PERTE
-                            
+                                               
+                           
                         # REGLE 3 : CALCUL DE LA PERTE
                         else:
                             # On cherche la meilleure cible possible entre le prix record et la remise théorique
                             cible_remise = 999999.0
+                            brut_facture = clean_float(row['Prix Brut'])
                             if m['Best_Brut_Associe'] > 0:
-                                cible_remise = clean_float(row['Prix Brut']) * (1 - m['Best_Remise']/100)
-                                if (clean_float(row['Prix Brut']) / m['Best_Brut_Associe']) < 0.5:
+                                # Louis : Si le brut facture est quasi = au prix net (prix forcé, remise 0%)
+                                # alors on utilise le brut réf pour calculer la cible, pas le brut bidon
+                                remise_ligne = clean_float(str(row['Remise']).replace('%', ''))
+                                if remise_ligne == 0 and brut_facture > 0:
                                     cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
+                                else:
+                                    cible_remise = brut_facture * (1 - m['Best_Remise']/100)
+                                    if (brut_facture / m['Best_Brut_Associe']) < 0.5:
+                                        cible_remise = m['Best_Brut_Associe'] * (1 - m['Best_Remise']/100)
                             
                             cible = min(m['Best_Price_Net'], cible_remise)
                             
@@ -1038,6 +1044,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
