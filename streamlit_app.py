@@ -565,11 +565,21 @@ if session:
                             remise_finale = round(taux_virtuel, 2)
                     # ----------------------------------------------------
 
-                    # Louis : Best_Brut = le brut le plus BAS historique (le vrai prix catalogue)
-                    # C'est lui qui prouve que YESSS gonfle le brut quand ils veulent t'enfumer
+                    # Louis : On cherche le brut le plus bas, mais on accepte +5% d'une année à l'autre
+                    # Comme ça dans 3 ans on a toujours un brut réf à jour
                     tous_bruts = group[group['PU_Systeme'] > 0.01].copy()
                     tous_bruts['Brut_Float'] = tous_bruts['Prix Brut'].apply(clean_float)
-                    brut_le_plus_bas = tous_bruts[tous_bruts['Brut_Float'] > 0]['Brut_Float'].min() if not tous_bruts.empty else 0
+                    tous_bruts['Annee'] = pd.to_datetime(tous_bruts['Date'], errors='coerce').dt.year
+                    bruts_valides = tous_bruts[tous_bruts['Brut_Float'] > 0].sort_values('Annee')
+                    
+                    if not bruts_valides.empty:
+                        brut_le_plus_bas = bruts_valides.iloc[0]['Brut_Float']
+                        for _, row_b in bruts_valides.iterrows():
+                            hausse = ((row_b['Brut_Float'] / brut_le_plus_bas) - 1) * 100
+                            if hausse <= 5:
+                                brut_le_plus_bas = row_b['Brut_Float']
+                    else:
+                        brut_le_plus_bas = 0
 
                     ref_map[art] = {
                         'Best_Remise': remise_finale,
@@ -1015,6 +1025,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
