@@ -50,11 +50,20 @@ def generer_pdf_facture(num_facture, date_facture, fournisseur, anomalies_factur
     story.append(Spacer(1, 12))
     
     # TABLEAU
-    header = ['Article', 'Designation', 'Qte', 'Brut', 'Remise', 'Paye', 'Cible', 'Perte']
+    is_global = num_facture == "GLOBAL"
+    
+    if is_global:
+        header = ['Facture', 'Date', 'Article', 'Designation', 'Qte', 'Brut', 'Remise', 'Paye', 'Cible', 'Perte']
+    else:
+        header = ['Article', 'Designation', 'Qte', 'Brut', 'Remise', 'Paye', 'Cible', 'Perte']
     data_table = [header]
     
     for a in anomalies_facture:
-        data_table.append([
+        row_data = []
+        if is_global:
+            row_data.append(Paragraph(str(a.get('Facture', '')), style_cell))
+            row_data.append(str(a.get('Date', ''))[:10])
+        row_data.extend([
             str(a.get('Article', '')),
             Paragraph(str(a.get('Designation', ''))[:40], style_cell),
             str(a.get('Qte', '')),
@@ -64,11 +73,17 @@ def generer_pdf_facture(num_facture, date_facture, fournisseur, anomalies_factur
             f"{clean_float(str(a.get('Prix Cible', 0))):.2f}",
             f"{clean_float(str(a.get('Perte', 0))):.2f}"
         ])
+        data_table.append(row_data)
     
     # Ligne total
-    data_table.append(['', '', '', '', '', '', 'TOTAL', f"{total_perte:.2f}"])
+    nb_cols = len(header)
+    total_row = [''] * (nb_cols - 2) + ['TOTAL', f"{total_perte:.2f}"]
+    data_table.append(total_row)
     
-    col_widths = [55, 120, 25, 45, 45, 45, 45, 45]
+    if is_global:
+        col_widths = [60, 50, 45, 90, 22, 38, 38, 38, 38, 38]
+    else:
+        col_widths = [55, 120, 25, 45, 45, 45, 45, 45]
     t = Table(data_table, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
@@ -1234,6 +1249,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
