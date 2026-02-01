@@ -937,7 +937,7 @@ if session:
                         "Payé (U)": row['PU_Systeme'],
                         "Cible (U)": cible,
                         # On utilise 'remise_cible_str' car c'est la seule variable qui existe ici.
-                        "Prix Cible": f"{(clean_float(str(row['Prix Brut'])) * (1 - clean_float(str(remise_cible_str).replace('%',''))/100)):.4f} €",
+                        "Prix Cible": f"{cible:.4f} €",
                         "Perte": perte,                        
 # --- AJOUT SPECIAL LOUIS : ON MET L'INFO DANS LE TUYAU ---
                         # Louis : On ajoute une colonne invisible "Prix_Ref_Hist" dans les données.
@@ -1269,6 +1269,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
