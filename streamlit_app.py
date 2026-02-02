@@ -435,7 +435,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             pnu = clean_float(str(l.get('prix_net_unitaire', l.get('prix_net', 0))))
             mont = clean_float(str(l.get('montant', 0)))
             bl = l.get('num_bl_ligne', '')
-            famille = detecter_famille(ref, desig)
+            famille = detecter_famille(desig, ref)
             
             supabase.table("lignes_factures").insert({
                 "user_id": user_id,
@@ -1315,6 +1315,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
