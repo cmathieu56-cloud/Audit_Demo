@@ -937,7 +937,7 @@ if session:
                 
                 # Seuil 3% pour câbles
                 ecart_pourcent = (perte / (cible * a.get('quantite', 1))) * 100 if cible > 0 else 0
-                if perte > 0.01 and ecart_pourcent >= 3:
+                if perte > 0.01:
                     anomalies.append({
                         "Fichier_Source": a.get('fichier', ''),
                         "Fournisseur": a.get('fournisseur', ''),
@@ -1365,6 +1365,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
