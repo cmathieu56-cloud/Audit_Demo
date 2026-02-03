@@ -382,6 +382,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         {
             "fournisseur": "...",
             "adresse_fournisseur": "...",
+            "siret_fournisseur": "...",
             "tva_fournisseur": "...",
             "iban": "...",
             "date": "2025-01-01",
@@ -1301,6 +1302,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
