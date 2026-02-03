@@ -929,6 +929,8 @@ if session:
                         "Détails Techniques": f"(Total: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                     })
             
+            st.write(f"DEBUG: nb total anomalies = {len(anomalies)}")
+            
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
                 total_perte = df_ano['Perte'].sum()
@@ -1247,6 +1249,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
