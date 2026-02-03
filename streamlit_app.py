@@ -337,8 +337,14 @@ def traiter_un_fichier(nom_fichier, user_id):
              * num_bl_ligne : Le numéro de BL.
 
         3. RÈGLE "FRAIS CACHÉS" :
-           - Scanne le bas de la facture pour "FF", "Frais", "Port". 
+           - Scanne le bas de la facture pour les FRAIS DE FACTURATION (FF, Fr.F, Frais Fixes, Frais de Gestion).
            - Si trouvé, crée une ligne avec l'article "FRAIS_ANNEXE".
+           - ⚠️ ATTENTION : NE PAS confondre avec :
+             * L'ESCOMPTE (réduction pour paiement anticipé, souvent 0.5% ou 0.75%)
+             * La TVA
+             * La DEEE / Eco-taxe
+             * Le TOTAL HT ou TTC
+           - Les vrais frais de facturation sont généralement entre 6€ et 15€.
 
         JSON ATTENDU :
         {
@@ -1253,6 +1259,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
