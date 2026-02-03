@@ -352,8 +352,8 @@ def traiter_un_fichier(nom_fichier, user_id):
 
         1. INFOS ENTREPRISE & SÉCURITÉ :
            - Fournisseur (Nom complet), Adresse, IBAN, Date, Numéro Facture.
-           - SIRET du fournisseur : Cherche "Siret" ou "SIRET" dans l'en-tête (14 chiffres). C'est le SIRET de l'agence qui facture, PAS celui du client.
-           - TVA du fournisseur : Cherche "N° TVA" ou "Identification TVA" du FOURNISSEUR (pas du client). Format FR + 11 chiffres.
+           - SIRET du fournisseur : Cherche "Siret :" dans l'en-tête de la facture (14 chiffres). C'est celui de l'AGENCE qui émet la facture.
+           - TVA du fournisseur : Cherche en BAS de la facture "N° Identification T.V.A." (format FR + 11 chiffres). ATTENTION : ne pas confondre avec le TVA du CLIENT.
            - Numéro Commande : Cherche "V/Réf", "Chantier". Si vide, mets "-".
 
         2. EXTRACTION DES LIGNES (RÈGLES CRITIQUES) :
@@ -1302,6 +1302,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
