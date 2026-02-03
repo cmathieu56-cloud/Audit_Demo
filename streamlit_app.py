@@ -351,7 +351,9 @@ def traiter_un_fichier(nom_fichier, user_id):
         Utilise ta capacité de raisonnement pour valider chaque chiffre.
 
         1. INFOS ENTREPRISE & SÉCURITÉ :
-           - Fournisseur (Nom complet), Adresse, TVA, IBAN, Date, Numéro Facture.
+           - Fournisseur (Nom complet), Adresse, IBAN, Date, Numéro Facture.
+           - SIRET du fournisseur : Cherche "Siret" ou "SIRET" dans l'en-tête (14 chiffres). C'est le SIRET de l'agence qui facture, PAS celui du client.
+           - TVA du fournisseur : Cherche "N° TVA" ou "Identification TVA" du FOURNISSEUR (pas du client). Format FR + 11 chiffres.
            - Numéro Commande : Cherche "V/Réf", "Chantier". Si vide, mets "-".
 
         2. EXTRACTION DES LIGNES (RÈGLES CRITIQUES) :
@@ -1299,6 +1301,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
