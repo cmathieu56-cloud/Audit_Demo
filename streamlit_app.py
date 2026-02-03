@@ -339,7 +339,6 @@ def get_fournisseur_normalise(tva_raw, nom_gemini):
         return nom_gemini
 
 def traiter_un_fichier(nom_fichier, user_id):
-def traiter_un_fichier(nom_fichier, user_id):
     try:
         path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
@@ -1298,6 +1297,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
