@@ -933,6 +933,8 @@ if session:
             
             if anomalies:
                 df_ano = pd.DataFrame(anomalies)
+                st.write(f"DEBUG: colonnes df_ano = {list(df_ano.columns)}")
+                st.write(f"DEBUG: Perte sum = {df_ano['Perte'].sum()}")
                 total_perte = df_ano['Perte'].sum()
                 # --- BLOC PODIUM : MONTANT + % ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
@@ -1249,6 +1251,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
