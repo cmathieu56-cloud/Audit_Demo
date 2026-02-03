@@ -715,111 +715,26 @@ if session:
                 st.divider()
                 # --- FIN AJOUT ---
 
-            df_produits = df[~df['Famille'].isin(['FRAIS PORT', 'FRAIS GESTION', 'TAXE'])]
-            ref_map = {}
+            # ===== NOUVELLE LOGIQUE SQL =====
+            # Louis : On utilise les vues SQL au lieu de calculer en Python
+            
             registre = charger_registre(user_id)
-            
-            if not df_produits.empty:
-                df_clean = df_produits[df_produits['Article'] != 'SANS_REF'].copy()
-                df_clean['Remise_Val'] = df_clean['Remise'].apply(lambda x: clean_float(str(x).replace('%', '')))
-                
-                for art, group in df_clean.groupby('Article'):
-                    # On vérifie si on a déjà pris une décision sur cet article
-                    accord = registre.get(art)
-                    
-                    # Logique de sélection des records
-                    valid_remises = group[group['Remise_Val'] > 0].sort_values('Remise_Val', ascending=False)
-                    valid_prices = group[group['PU_Systeme'] > 0.01].sort_values('PU_Systeme', ascending=True) # <--- LIGNE DE REPERE AVANT
-
-                    # --- CORRECTION PROMO ---
-                    # Louis : C'est ici qu'on résout le bug. Si tu marques un article comme "PROMO",
-                    # on identifie le prix de cette promo (le moins cher de la liste).
-                    # Ensuite, on dit au programme d'ignorer TOUTES les factures qui ont ce prix promo.
-                    # De cette façon, il va chercher le prix suivant (ton prix normal à 129 €) pour calculer la perte.
-                    idx_r, idx_p = 0, 0
-                    if accord and accord['type'] == "PROMO":
-                        if not valid_prices.empty:
-                            prix_promo = valid_prices.iloc[0]['PU_Systeme']
-                            # On filtre : on ne garde que les factures dont le prix est différent de la promo
-                            valid_prices = valid_prices[abs(valid_prices['PU_Systeme'] - prix_promo) > 0.10]
-                            valid_remises = valid_remises[abs(valid_remises['PU_Systeme'] - prix_promo) > 0.10]
-                    # -------------------------
-
-                    best_r_row = valid_remises.iloc[idx_r] if not valid_remises.empty else group.iloc[0] # <--- LIGNE DE REPERE APRES
-                    best_p_row = valid_prices.iloc[idx_p] if not valid_prices.empty else group.iloc[0]
-
-                    # Si c'est un CONTRAT forcé, on écrase la remise par celle du registre
-                    remise_finale = accord['valeur'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Remise_Val']
-
-                    # --- CORRECTION LOGIQUE "PRIX NET" vs "PRIX BRUT" ---
-                    # Si le meilleur prix est un "Net" (0 remise) et qu'il est meilleur que le prix remisé habituel
-                    # Alors on recalcule la remise théorique en utilisant le Brut du prix remisé.
-                    p_net_record = best_p_row['PU_Systeme']
-                    p_net_standard = best_r_row['PU_Systeme']
-                    
-                    if p_net_record < (p_net_standard - 0.05) and best_p_row['Remise_Val'] == 0:
-                        # Louis : Le meilleur prix a remise 0% (prix forcé type 19.58€)
-                        # On cherche le VRAI brut sur les autres factures qui ONT une remise
-                        lignes_avec_remise = group[group['Remise_Val'] > 0]
-                        if not lignes_avec_remise.empty:
-                            brut_ref = clean_float(lignes_avec_remise.iloc[0]['Prix Brut'])
-                        else:
-                            brut_ref = clean_float(best_r_row['Prix Brut'])
-                        if brut_ref > 0:
-                            # Calcul inverse : Quelle remise donne ce prix net sur ce brut ?
-                            taux_virtuel = (1 - (p_net_record / brut_ref)) * 100
-                            remise_finale = round(taux_virtuel, 2)                  
-                    
-
-                    # Louis : On cherche le brut le plus bas, mais on accepte +5% d'une année à l'autre
-                    # Comme ça dans 3 ans on a toujours un brut réf à jour
-                    tous_bruts = group[group['PU_Systeme'] > 0.01].copy()
-                    tous_bruts['Brut_Float'] = tous_bruts['Prix Brut'].apply(clean_float)
-                    tous_bruts['Annee'] = pd.to_datetime(tous_bruts['Date'], errors='coerce').dt.year
-                    # Louis : On exclut les prix forcés (remise 0% où brut = net) car c'est pas le vrai brut catalogue
-                    bruts_valides = tous_bruts[(tous_bruts['Brut_Float'] > 0) & (tous_bruts['Remise_Val'] > 0)].sort_values('Annee')
-                    # Si aucune ligne avec remise, on garde tout comme avant
-                    if bruts_valides.empty:
-                        bruts_valides = tous_bruts[tous_bruts['Brut_Float'] > 0].sort_values('Annee')
-                    
-                    if not bruts_valides.empty:
-                        brut_le_plus_bas = bruts_valides.iloc[0]['Brut_Float']
-                        for _, row_b in bruts_valides.iterrows():
-                            hausse = ((row_b['Brut_Float'] / brut_le_plus_bas) - 1) * 100
-                            if hausse <= 5:
-                                brut_le_plus_bas = row_b['Brut_Float']
-                    else:
-                        brut_le_plus_bas = 0
-
-                    ref_map[art] = {
-                        'Best_Remise': remise_finale,
-                        'Best_Brut_Associe': brut_le_plus_bas if brut_le_plus_bas > 0 else clean_float(best_r_row['Prix Brut']),
-                        # Louis : Le brut du jour où on a eu le meilleur prix net (pour prouver le gonflage)
-                        'Brut_Du_Best_Price': clean_float(best_p_row['Prix Brut']),
-                        'Best_Price_Net': best_p_row['PU_Systeme'],
-                        'Price_At_Best_Remise': best_r_row['PU_Systeme'],
-                        'Date_Remise': accord['date'] if (accord and accord['type'] == "CONTRAT") else best_r_row['Date'],
-                        'Date_Price': best_p_row['Date']
-                    }
-
-                    # --- MODIFICATION : ON COMMENTE TOUT POUR ARRETER LE LAG ---
-                    # if remise_finale > 0:
-                    #     try:
-                    #         supabase.table("market_rates").upsert({
-                    #             "user_id": user_id,
-                    #             "article": art,
-                    #             "fournisseur": best_r_row['Fournisseur'],
-                    #             "remise": remise_finale,
-                    #             "date_ref": best_r_row['Date']
-                    #         }).execute()
-                    #     except: pass
-                    # -----------------------------------------------------------
-            
             facture_totals = df.groupby('Fichier')['Montant'].sum().to_dict()
             
-            # Louis : On récupère les factures corrigées par un avoir CORRECTION
-            # Pour ne pas compter la perte 2 fois (facture originale + avoir)
-            articles_corriges = {}  # {num_facture_origine: [liste d'articles corrigés]}
+            # 1. Récupérer les anomalies PRIX depuis SQL (hors câbles et frais)
+            res_prix = supabase.table("vue_anomalies_prix").select("*").eq("user_id", user_id).execute()
+            anomalies_prix = res_prix.data if res_prix.data else []
+            
+            # 2. Récupérer les anomalies CABLAGE depuis SQL
+            res_cable = supabase.table("vue_anomalies_cablage").select("*").eq("user_id", user_id).execute()
+            anomalies_cable = res_cable.data if res_cable.data else []
+            
+            # 3. Récupérer les FRAIS depuis SQL
+            res_frais = supabase.table("vue_anomalies_frais").select("*").eq("user_id", user_id).execute()
+            anomalies_frais_sql = res_frais.data if res_frais.data else []
+            
+            # 4. Articles corrigés par avoir (pour ne pas compter 2 fois)
+            articles_corriges = {}
             for f_name_av, json_str_av in memoire.items():
                 try:
                     data_av = json.loads(json_str_av)
@@ -834,167 +749,183 @@ if session:
                     continue
             
             anomalies = []
-
-            for idx, row in df.iterrows():
-                f_name = row['Fichier']
-                num_facture = row['Facture']
-                fourn = row['Fournisseur']
+            
+            # --- TRAITEMENT ANOMALIES PRIX (SQL) ---
+            for a in anomalies_prix:
+                art = a.get('article', '')
+                num_fac = a.get('num_facture', '')
                 
-                # Louis : Si cette ligne a été corrigée par un avoir, on la saute
-                if num_facture in articles_corriges and row['Article'] in articles_corriges[num_facture]:
+                # Skip si corrigé par avoir
+                if num_fac in articles_corriges and art in articles_corriges[num_fac]:
                     continue
                 
+                # Skip si accord ERREUR ou PROMO
+                accord = registre.get(art)
+                if accord and accord['type'] in ['ERREUR', 'PROMO']:
+                    continue
+                
+                # Si HAUSSE validée, on compare au nouveau prix
+                if accord and accord['type'] == 'HAUSSE':
+                    prix_hausse = clean_float(str(accord['valeur']))
+                    if prix_hausse > 0 and a.get('paye_unitaire', 0) <= prix_hausse + 0.05:
+                        continue
+                    elif prix_hausse > 0:
+                        perte = (a.get('paye_unitaire', 0) - prix_hausse) * a.get('quantite', 1)
+                        cible = prix_hausse
+                    else:
+                        perte = a.get('perte', 0)
+                        cible = a.get('prix_cible', 0)
+                else:
+                    perte = a.get('perte', 0)
+                    cible = a.get('prix_cible', 0)
+                
+                if perte > 0.01:
+                    anomalies.append({
+                        "Fichier_Source": a.get('fichier', ''),
+                        "Fournisseur": a.get('fournisseur', ''),
+                        "Num Facture": num_fac,
+                        "Ref_Cmd": "",
+                        "BL": "",
+                        "Famille": a.get('famille', ''),
+                        "PU_Systeme": a.get('paye_unitaire', 0),
+                        "Montant": a.get('paye_unitaire', 0) * a.get('quantite', 1),
+                        "Prix Brut": a.get('prix_brut', 0),
+                        "Brut Réf": 0,
+                        "Remise": a.get('remise', ''),
+                        "Remise Cible": f"{cible:.2f}€",
+                        "Qte": a.get('quantite', 1),
+                        "Ref": art,
+                        "Désignation": a.get('designation', ''),
+                        "Payé (U)": a.get('paye_unitaire', 0),
+                        "Cible (U)": cible,
+                        "Prix Cible": f"{cible:.4f} €",
+                        "Perte": perte,
+                        "Prix_Ref_Hist": cible,
+                        "Motif": "Hausse de prix",
+                        "Date Facture": a.get('date_facture', ''),
+                        "Source Cible": a.get('date_best_prix', ''),
+                        "Détails Techniques": ""
+                    })
+            
+            # --- TRAITEMENT ANOMALIES CABLAGE (SQL) ---
+            for a in anomalies_cable:
+                art = a.get('article', '')
+                num_fac = a.get('num_facture', '')
+                
+                if num_fac in articles_corriges and art in articles_corriges[num_fac]:
+                    continue
+                
+                accord = registre.get(art)
+                if accord and accord['type'] in ['ERREUR', 'PROMO']:
+                    continue
+                
+                perte = a.get('perte', 0)
+                cible = a.get('prix_cible', 0)
+                
+                # Seuil 3% pour câbles
+                ecart_pourcent = (perte / (cible * a.get('quantite', 1))) * 100 if cible > 0 else 0
+                if perte > 0.01 and ecart_pourcent >= 3:
+                    anomalies.append({
+                        "Fichier_Source": a.get('fichier', ''),
+                        "Fournisseur": a.get('fournisseur', ''),
+                        "Num Facture": num_fac,
+                        "Ref_Cmd": "",
+                        "BL": "",
+                        "Famille": "CABLAGE",
+                        "PU_Systeme": a.get('paye_unitaire', 0),
+                        "Montant": a.get('paye_unitaire', 0) * a.get('quantite', 1),
+                        "Prix Brut": a.get('prix_brut', 0),
+                        "Brut Réf": 0,
+                        "Remise": a.get('remise', ''),
+                        "Remise Cible": f"{a.get('best_remise', 0)}%",
+                        "Qte": a.get('quantite', 1),
+                        "Ref": art,
+                        "Désignation": a.get('designation', ''),
+                        "Payé (U)": a.get('paye_unitaire', 0),
+                        "Cible (U)": cible,
+                        "Prix Cible": f"{cible:.4f} €",
+                        "Perte": perte,
+                        "Prix_Ref_Hist": cible,
+                        "Motif": "Remise insuffisante",
+                        "Date Facture": a.get('date_facture', ''),
+                        "Source Cible": a.get('date_best_remise', ''),
+                        "Détails Techniques": f"Remise: {a.get('remise_val', 0)}% vs {a.get('best_remise', 0)}%"
+                    })
+            
+            # --- TRAITEMENT FRAIS (SQL + config fournisseur) ---
+            for a in anomalies_frais_sql:
+                fourn = a.get('fournisseur', '')
+                fichier = a.get('fichier', '')
+                num_fac = a.get('num_facture', '')
+                montant = a.get('montant_frais', 0)
+                
                 rules = config_dict.get(fourn, {"Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0})
-                seuil_franco = rules.get("Franco (Seuil €)", 0.0)
                 max_gestion = rules.get("Max Gestion (€)", 0.0)
                 
-                perte = 0
-                motif = ""
-                cible = 0.0                 
-                source_cible = "-"
-                # Louis : On crée une variable vide au début de chaque ligne.
-                # Elle servira à stocker le "Vrai Prix Historique" si on en trouve un.
-                prix_historique_ref = 0.
-                detail_tech = ""
-                # 2. INITIALISATION (Corrigée : Placée ICI, avant les IF)
-                remise_cible_str = "-" 
-                
-                # --- LOGIQUE 1 : FRAIS (Gestion & Port) ---
-                if row['Famille'] == "FRAIS GESTION":
-                    if row['Montant'] > max_gestion:
-                        perte = row['Montant'] - max_gestion
-                        cible = max_gestion
-                        motif = "Frais Facturation Abusifs"
-                        detail_tech = f"(Max autorisé: {max_gestion}€)"
-                
-                elif row['Famille'] == "FRAIS PORT":
-                    total_fac = facture_totals.get(f_name, 0)
-                    if total_fac >= seuil_franco:
-                        perte = row['Montant']
-                        motif = "Port facturé malgré Franco"
-                        cible = 0.0
-                        detail_tech = f"(Total Facture: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
-                        remise_cible_str = "100%"
-
-                # --- LOGIQUE HYBRIDE V3 : LE NET EST JUGE ---
-                else:
-                    art = row['Article']
-                    remise_actuelle = clean_float(str(row['Remise']).replace('%', ''))
-                    pu_paye = row['PU_Systeme']
-                    
-                    if art in ref_map and art != 'SANS_REF':
-                        m = ref_map[art]
-
-# --- AJOUT SPECIAL LOUIS : RECUPERATION DU PRIX ---
-                        # Louis : C'est ICI qu'on va chercher l'info dans le "Cerveau" (ref_map).
-                        # On lui dit : "Ressors-moi le prix net en Euros qui correspond à la meilleure remise qu'on a jamais eue".
-                        # Comme ça, on a le VRAI chiffre (56.75€) et pas un calcul théorique foireux.
-                        prix_historique_ref = m['Price_At_Best_Remise']
-                        
-                        # REGLE 0 : HAUSSE VALIDEE
-                        # Louis : Si on a validé une hausse annuelle, le nouveau prix devient la référence
-                        if accord and accord['type'] == "HAUSSE":
-                            prix_hausse = clean_float(str(accord['valeur']))
-                            if prix_hausse > 0 and pu_paye <= prix_hausse + 0.05:
-                                perte = 0
-                            elif prix_hausse > 0 and pu_paye > prix_hausse + 0.05:
-                                perte = (pu_paye - prix_hausse) * row['Quantité']
-                                motif = "Hausse de prix"
-                                cible = prix_hausse
-                                source_cible = accord['date']
-                                remise_cible_str = f"{prix_hausse:.2f}€"
-                        
-                        # REGLE 1 : SECURITE ABSOLUE (Berner)
-                        # Si on paye le prix record ou moins, perte = 0
-                        elif pu_paye <= m['Best_Price_Net'] + 0.05:
-                            perte = 0
-                        
-                        # REGLE 2 : RESPECT DE LA REMISE (Thermor)
-                        elif m['Best_Remise'] > 0 and remise_actuelle >= m['Best_Remise'] - 0.1:
-                            perte = 0
-                        
-                        # REGLE 2.5 : TOLERANCE HAUSSE ANNUELLE
-                        # Si même remise (±0.5 point) et brut augmente de max 5%, on tolère
-                        elif m['Best_Remise'] > 0 and abs(remise_actuelle - m['Best_Remise']) <= 0.5:
-                            brut_actuel = clean_float(row['Prix Brut'])
-                            brut_ref = m['Best_Brut_Associe']
-                            if brut_ref > 0:
-                                hausse_brut = ((brut_actuel / brut_ref) - 1) * 100
-                                if 0 <= hausse_brut <= 5:
-                                    perte = 0
-                                               
-                           
-                        # REGLE 3 : CALCUL DE LA PERTE
-                        else:
-                            # Louis : 2 logiques selon la famille
-                            # CABLAGE = on compare la REMISE (brut bouge avec cours cuivre)
-                            # TOUT LE RESTE = on compare le PRIX NET (brut manipulable)
-                            
-                            if row['Famille'] == "CABLAGE":
-                                brut_facture = clean_float(row['Prix Brut'])
-                                if m['Best_Remise'] > 0 and brut_facture > 0:
-                                    cible = brut_facture * (1 - m['Best_Remise']/100)
-                                else:
-                                    cible = m['Best_Price_Net']
-                                source_cible = m['Date_Remise']
-                                remise_cible_str = f"{m['Best_Remise']:g}%"
-                            else:
-                                cible = m['Best_Price_Net']
-                                source_cible = m['Date_Price']
-                                remise_cible_str = f"{m['Best_Price_Net']:.2f}€"
-                            
-                            if pu_paye > cible + 0.01:
-                                perte = (pu_paye - cible) * row['Quantité']
-                                motif = "Hausse de prix"                
-                # Louis : On garde le seuil 3% uniquement pour CABLAGE (arrondis cours cuivre)
-                # Tout le reste : on détecte TOUT, même 0.02€
-                if row['Famille'] == "CABLAGE":
-                    ecart_pourcent = (perte / (cible * row['Quantité'])) * 100 if (cible > 0 and row['Quantité'] > 0) else 0
-                    filtre_ok = perte > 0.01 and ecart_pourcent >= 3
-                else:
-                    filtre_ok = perte > 0.01
-                if filtre_ok:
-                    # --- Nettoyage Affichage Prix Brut ---
-                    prix_brut_affiche = row['Prix Brut']
-                    try:
-                        val_float = float(str(prix_brut_affiche).replace(' ', '').replace(',', '.'))
-                        prix_brut_affiche = f"{val_float:.2f}"
-                    except: pass
-                    
-                    if remise_cible_str == "-" and row['Famille'] not in ["FRAIS GESTION", "FRAIS PORT"]:
-                         remise_cible_str = "?"
-
+                if montant > max_gestion:
+                    perte = montant - max_gestion
                     anomalies.append({
-                        "Fichier_Source": f_name, # Pour le filtre d'affichage
-                        "Fournisseur": fourn,                        
+                        "Fichier_Source": fichier,
+                        "Fournisseur": fourn,
+                        "Num Facture": num_fac,
+                        "Ref_Cmd": "",
+                        "BL": "",
+                        "Famille": "FRAIS GESTION",
+                        "PU_Systeme": montant,
+                        "Montant": montant,
+                        "Prix Brut": montant,
+                        "Brut Réf": 0,
+                        "Remise": "-",
+                        "Remise Cible": "-",
+                        "Qte": 1,
+                        "Ref": "FRAIS_ANNEXE",
+                        "Désignation": a.get('designation', 'Frais de facturation'),
+                        "Payé (U)": montant,
+                        "Cible (U)": max_gestion,
+                        "Prix Cible": f"{max_gestion:.2f} €",
+                        "Perte": perte,
+                        "Prix_Ref_Hist": 0,
+                        "Motif": "Frais Facturation Abusifs",
+                        "Date Facture": a.get('date_facture', ''),
+                        "Source Cible": "-",
+                        "Détails Techniques": f"(Max autorisé: {max_gestion}€)"
+                    })
+            
+            # --- TRAITEMENT FRAIS PORT (reste en Python car besoin du total facture) ---
+            df_port = df[df['Famille'] == 'FRAIS PORT']
+            for idx, row in df_port.iterrows():
+                fourn = row['Fournisseur']
+                f_name = row['Fichier']
+                rules = config_dict.get(fourn, {"Franco (Seuil €)": 0.0, "Max Gestion (€)": 0.0})
+                seuil_franco = rules.get("Franco (Seuil €)", 0.0)
+                total_fac = facture_totals.get(f_name, 0)
+                
+                if total_fac >= seuil_franco and row['Montant'] > 0:
+                    anomalies.append({
+                        "Fichier_Source": f_name,
+                        "Fournisseur": fourn,
                         "Num Facture": row['Facture'],
-                        "Ref_Cmd": row['Ref_Cmd'], 
-                        "BL": row['BL'], 
-                        "Famille": row['Famille'],
+                        "Ref_Cmd": row.get('Ref_Cmd', ''),
+                        "BL": row.get('BL', ''),
+                        "Famille": "FRAIS PORT",
                         "PU_Systeme": row['PU_Systeme'],
                         "Montant": row['Montant'],
-                        "Prix Brut": prix_brut_affiche,
-                        "Brut Réf": ref_map[row['Article']]['Best_Brut_Associe'] if row['Article'] in ref_map else 0,
-                        "Remise": row['Remise'],
-                        "Remise Cible": remise_cible_str, # 4. AFFICHAGE (Corrigé)
-                        "Qte": row['Quantité'],
-                        "Ref": row['Article'],
+                        "Prix Brut": row['Montant'],
+                        "Brut Réf": 0,
+                        "Remise": "-",
+                        "Remise Cible": "100%",
+                        "Qte": 1,
+                        "Ref": "PORT",
                         "Désignation": row['Désignation'],
-                        "Payé (U)": row['PU_Systeme'],
-                        "Cible (U)": cible,
-                        # On utilise 'remise_cible_str' car c'est la seule variable qui existe ici.
-                        "Prix Cible": f"{cible:.4f} €",
-                        "Perte": perte,                        
-# --- AJOUT SPECIAL LOUIS : ON MET L'INFO DANS LE TUYAU ---
-                        # Louis : On ajoute une colonne invisible "Prix_Ref_Hist" dans les données.
-                        # Elle sert juste à transporter le prix de 56.75€ jusqu'à l'affichage du titre plus bas.
-                        "Prix_Ref_Hist": prix_historique_ref,
-                        "Motif": motif,
+                        "Payé (U)": row['Montant'],
+                        "Cible (U)": 0,
+                        "Prix Cible": "0.00 €",
+                        "Perte": row['Montant'],
+                        "Prix_Ref_Hist": 0,
+                        "Motif": "Port facturé malgré Franco",
                         "Date Facture": row['Date'],
-                        "Source Cible": source_cible,     
-                        # --- LIGNE DE REPÈRE AVANT ---
-                        "Détails Techniques": detail_tech
-
+                        "Source Cible": "-",
+                        "Détails Techniques": f"(Total: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                     })
             
             if anomalies:
@@ -1315,6 +1246,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
