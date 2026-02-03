@@ -669,6 +669,60 @@ if session:
     tab_config, tab_analyse, tab_import, tab_brut = st.tabs(["⚙️ CONFIGURATION", "📊 ANALYSE & PREUVES", "📥 IMPORT", "🔍 SCAN TOTAL"])
 
     with tab_config:
+        st.header("🏢 Mon Entreprise")
+        
+        # Chargement des infos entreprise
+        if 'user_settings' not in st.session_state:
+            try:
+                res_settings = supabase.table("user_settings").select("*").eq("user_id", user_id).execute()
+                if res_settings.data:
+                    st.session_state['user_settings'] = res_settings.data[0]
+                else:
+                    st.session_state['user_settings'] = {}
+            except:
+                st.session_state['user_settings'] = {}
+        
+        settings = st.session_state['user_settings']
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            nom_entreprise = st.text_input("Nom de l'entreprise", value=settings.get('nom_entreprise', ''))
+            adresse = st.text_input("Adresse", value=settings.get('adresse', ''))
+            code_postal = st.text_input("Code postal", value=settings.get('code_postal', ''))
+            ville = st.text_input("Ville", value=settings.get('ville', ''))
+            email = st.text_input("Email", value=settings.get('email', ''))
+        with col2:
+            siren = st.text_input("SIREN (9 chiffres)", value=settings.get('siren', ''))
+            tva = st.text_input("N° TVA", value=settings.get('tva', ''))
+            iban = st.text_input("IBAN", value=settings.get('iban', ''))
+            telephone = st.text_input("Téléphone", value=settings.get('telephone', ''))
+            nom_contact = st.text_input("Nom du gérant/contact", value=settings.get('nom_contact', ''))
+        
+        if st.button("💾 SAUVEGARDER MES INFOS", key="save_settings"):
+            try:
+                supabase.table("user_settings").upsert({
+                    "user_id": user_id,
+                    "nom_entreprise": nom_entreprise,
+                    "adresse": adresse,
+                    "code_postal": code_postal,
+                    "ville": ville,
+                    "siren": siren,
+                    "tva": tva,
+                    "iban": iban,
+                    "email": email,
+                    "telephone": telephone,
+                    "nom_contact": nom_contact
+                }).execute()
+                st.session_state['user_settings'] = {
+                    "nom_entreprise": nom_entreprise, "adresse": adresse, "code_postal": code_postal,
+                    "ville": ville, "siren": siren, "tva": tva, "iban": iban, "email": email,
+                    "telephone": telephone, "nom_contact": nom_contact
+                }
+                st.success("✅ Infos entreprise enregistrées !")
+            except Exception as e:
+                st.error(f"Erreur : {e}")
+        
+        st.divider()
         st.header("🛠️ Réglages Fournisseurs")
         
         # 1. Chargement initial depuis Supabase
@@ -1303,6 +1357,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
