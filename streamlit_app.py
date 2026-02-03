@@ -315,7 +315,7 @@ def get_fournisseur_normalise(tva_raw, nom_gemini):
     
     # Nettoyer le numéro TVA pour extraire le SIREN (9 derniers chiffres pour la France)
     tva_clean = ''.join(c for c in str(tva_raw) if c.isdigit())
-    siren = tva_clean[-9:] if len(tva_clean) >= 9 else tva_clean
+    siren = tva_clean[:9] if len(tva_clean) >= 9 else tva_clean
     
     if not siren:
         return nom_gemini
@@ -1303,6 +1303,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
