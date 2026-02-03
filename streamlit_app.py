@@ -937,6 +937,8 @@ if session:
                 st.write(f"DEBUG: Perte sum = {df_ano['Perte'].sum()}")
                 st.write(f"DEBUG: Date Facture sample = {df_ano['Date Facture'].head()}")
                 total_perte = df_ano['Perte'].sum()
+                st.write(f"DEBUG: df_ano Fournisseur unique = {df_ano['Fournisseur'].unique()}")
+                st.write(f"DEBUG: df_ano Perte par fourn = {df_ano.groupby('Fournisseur')['Perte'].sum()}")
                 # --- BLOC PODIUM : MONTANT + % ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
@@ -1252,6 +1254,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
