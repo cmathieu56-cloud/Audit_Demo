@@ -437,7 +437,15 @@ def traiter_un_fichier(nom_fichier, user_id):
             base = clean_float(str(l.get('base_facturation', 1)))
             if base <= 0: base = 1
             remise_str = str(l.get('remise', '0'))
-            remise_v = clean_float(remise_str.replace('%', '').split('+')[0])
+            # Louis : Calcul du taux équivalent pour les remises combinées (60+10 = 64%)
+            remise_parts = remise_str.replace('%', '').split('+')
+            remise_v = 0
+            reste = 100
+            for part in remise_parts:
+                taux = clean_float(part)
+                remise_v += reste * taux / 100
+                reste = reste * (1 - taux / 100)
+            remise_v = round(remise_v, 2)
             pnu = clean_float(str(l.get('prix_net_unitaire', l.get('prix_net', 0))))
             mont = clean_float(str(l.get('montant', 0)))
             bl = l.get('num_bl_ligne', '')
@@ -1259,6 +1267,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
