@@ -724,6 +724,7 @@ if session:
             # 1. Récupérer les anomalies PRIX depuis SQL (hors câbles et frais)
             res_prix = supabase.table("vue_anomalies_prix").select("*").eq("user_id", user_id).execute()
             anomalies_prix = res_prix.data if res_prix.data else []
+            st.write(f"DEBUG: user_id = {user_id}, nb anomalies prix = {len(anomalies_prix)}")
             
             # 2. Récupérer les anomalies CABLAGE depuis SQL
             res_cable = supabase.table("vue_anomalies_cablage").select("*").eq("user_id", user_id).execute()
@@ -1246,6 +1247,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
