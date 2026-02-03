@@ -1166,7 +1166,7 @@ if session:
                                                 st.rerun()
 
                                     # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
-                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Prix Brut', 'Brut Réf', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']] 
+                                    sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Prix Brut', 'Brut Réf', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']].sort_values('Date Facture', ascending=False)
                                     
                                     html_detail = (
                                         sub_df.style.format({'Qte': "{:g}", 'Prix Brut': "{}", 'Brut Réf': "{:.4f}", 'Payé (U)': "{:.4f} €", 'Perte': "{:.2f} €"})
@@ -1253,6 +1253,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
