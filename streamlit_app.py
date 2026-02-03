@@ -438,7 +438,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             if base <= 0: base = 1
             remise_str = str(l.get('remise', '0'))
             # Louis : Calcul du taux équivalent pour les remises combinées (60+10 = 64%)
-            remise_v = clean_float(remise_str.replace('%', '').split('+')[0])
+            remise_parts = remise_str.replace('%', '').split('+')
             remise_v = 0
             reste = 100
             for part in remise_parts:
@@ -1267,6 +1267,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
