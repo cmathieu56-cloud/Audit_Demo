@@ -308,24 +308,31 @@ def prompt_avoir():
     }
     """
 
-def get_fournisseur_normalise(tva_raw, nom_gemini):
-    """Louis : Récupère le nom normalisé du fournisseur via son SIREN/TVA"""
-    if not tva_raw:
+def get_fournisseur_normalise(siret_ou_tva, nom_gemini, user_id):
+    """Louis : Récupère le nom normalisé du fournisseur. Élimine le client automatiquement."""
+    if not siret_ou_tva:
         return nom_gemini
     
-    # Nettoyer le numéro TVA pour extraire le SIREN (9 derniers chiffres pour la France)
-    tva_clean = ''.join(c for c in str(tva_raw) if c.isdigit())
+    # Nettoyer pour extraire le SIREN (9 premiers chiffres)
+    tva_clean = ''.join(c for c in str(siret_ou_tva) if c.isdigit())
     siren = tva_clean[:9] if len(tva_clean) >= 9 else tva_clean
     
     if not siren:
         return nom_gemini
     
     try:
+        # Récupérer le SIREN du client (utilisateur)
+        res_user = supabase.table("user_settings").select("siren").eq("user_id", user_id).execute()
+        siren_client = res_user.data[0]['siren'] if res_user.data else None
+        
+        # Si c'est le SIREN du client, on ignore et on continue chercher le vrai fournisseur
+        if siren_client and siren == siren_client:
+            return nom_gemini
+        
         # Chercher dans la table fournisseurs
         res = supabase.table("fournisseurs").select("nom_affiche").eq("siren", siren).execute()
         
         if res.data and len(res.data) > 0:
-            # Trouvé → retourner le nom normalisé
             return res.data[0]['nom_affiche']
         else:
             # Pas trouvé → créer une entrée avec le nom Gemini
@@ -458,7 +465,7 @@ def traiter_un_fichier(nom_fichier, user_id):
         fournisseur_raw = data_json.get('fournisseur', '')
         siret_raw = data_json.get('siret_fournisseur', '')
         tva_raw = data_json.get('tva_fournisseur', '')
-        fournisseur = get_fournisseur_normalise(siret_raw or tva_raw, fournisseur_raw)
+        fournisseur = get_fournisseur_normalise(siret_raw or tva_raw, fournisseur_raw, user_id)
         num_fac = data_json.get('num_facture', '')
         date_fac = data_json.get('date', '')
         
@@ -1357,6 +1364,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
