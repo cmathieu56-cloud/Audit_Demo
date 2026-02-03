@@ -1158,7 +1158,7 @@ if session:
                                             sauvegarder_accord(article, "ERREUR", 0, "EUR", user_id)
                                             st.rerun()
                                     # Louis : Bouton hausse annuelle - valide le nouveau prix comme référence
-                                    if row['Famille'] != "CABLAGE":
+                                    if group['Famille'].iloc[0] != "CABLAGE":
                                         c_bt4 = st.columns([1])[0]
                                         with c_bt4:
                                             best_net = ref_map.get(article, {}).get('Best_Price_Net', 0)
@@ -1254,6 +1254,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
