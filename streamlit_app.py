@@ -456,8 +456,9 @@ def traiter_un_fichier(nom_fichier, user_id):
         type_doc = data_json.get('type_avoir', 'FACTURE')
         fac_origine = data_json.get('facture_origine', '')
         fournisseur_raw = data_json.get('fournisseur', '')
+        siret_raw = data_json.get('siret_fournisseur', '')
         tva_raw = data_json.get('tva_fournisseur', '')
-        fournisseur = get_fournisseur_normalise(tva_raw, fournisseur_raw)
+        fournisseur = get_fournisseur_normalise(siret_raw or tva_raw, fournisseur_raw)
         num_fac = data_json.get('num_facture', '')
         date_fac = data_json.get('date', '')
         
@@ -1302,6 +1303,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
