@@ -308,6 +308,37 @@ def prompt_avoir():
     }
     """
 
+def get_fournisseur_normalise(tva_raw, nom_gemini):
+    """Louis : Récupère le nom normalisé du fournisseur via son SIREN/TVA"""
+    if not tva_raw:
+        return nom_gemini
+    
+    # Nettoyer le numéro TVA pour extraire le SIREN (9 derniers chiffres pour la France)
+    tva_clean = ''.join(c for c in str(tva_raw) if c.isdigit())
+    siren = tva_clean[-9:] if len(tva_clean) >= 9 else tva_clean
+    
+    if not siren:
+        return nom_gemini
+    
+    try:
+        # Chercher dans la table fournisseurs
+        res = supabase.table("fournisseurs").select("nom_affiche").eq("siren", siren).execute()
+        
+        if res.data and len(res.data) > 0:
+            # Trouvé → retourner le nom normalisé
+            return res.data[0]['nom_affiche']
+        else:
+            # Pas trouvé → créer une entrée avec le nom Gemini
+            supabase.table("fournisseurs").insert({
+                "nom_affiche": nom_gemini,
+                "siren": siren,
+                "tva": tva_clean
+            }).execute()
+            return nom_gemini
+    except:
+        return nom_gemini
+
+def traiter_un_fichier(nom_fichier, user_id):
 def traiter_un_fichier(nom_fichier, user_id):
     try:
         path_storage = f"{user_id}/{nom_fichier}"
@@ -1267,6 +1298,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
