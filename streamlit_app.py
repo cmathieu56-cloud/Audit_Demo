@@ -1193,30 +1193,18 @@ if session:
                         )
                         # -------------------------------------
                         for article, group in df_litiges_fourn.groupby('Ref'):
-                                    # On ne récupère plus le prix_ref pour l'affichage
+                                    nom_art = group['Désignation'].iloc[0]
                                     date_ref = group['Source Cible'].iloc[0]
                                     remise_ref = group['Remise Cible'].iloc[0]
-                                    nom_art = group['Désignation'].iloc[0]
-
-# --- CORRECTION FINALE TITRE (SPECIAL LOUIS) ---
-                                    # Louis : Au lieu de faire un calcul (Prix * %), on lit juste la valeur qu'on a transportée.
-                                    try:
-                                        val_hist = group['Prix_Ref_Hist'].iloc[0]
-                                        
-                                        # Si on a un prix historique (ex: 56.75), on l'affiche.
-                                        if val_hist > 0:
-                                            txt_prix_cible = f" 👉 Soit **{val_hist:.4f} €**"
-                                        else:
-                                            txt_prix_cible = ""
-                                    except:
-                                        txt_prix_cible = ""
-                                    # Louis : On affiche le brut de réf pour qu'il voit sur quelle base la remise s'applique
-                                    try:
-                                        brut_ref_affiche = ref_map.get(article, {}).get('Brut_Du_Best_Price', 0)
-                                        txt_brut = f" (Brut Réf: **{brut_ref_affiche:.2f} €**)" if brut_ref_affiche > 0 else ""
-                                    except:
-                                        txt_brut = ""
-                                    st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Objectif Remise : **{remise_ref}**{txt_brut}{txt_prix_cible} (Vu le {date_ref})")
+                                    prix_cible = group['Cible (U)'].iloc[0]
+                                    famille = group['Famille'].iloc[0]
+                                    
+                                    if famille == "FRAIS GESTION":
+                                        st.markdown(f"**📦 {article}** - {nom_art} | Frais max autorisé : **{prix_cible:.2f}€**")
+                                    elif famille == "FRAIS PORT":
+                                        st.markdown(f"**📦 {article}** - {nom_art} | Port facturé malgré Franco")
+                                    else:
+                                        st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Meilleure remise : **{remise_ref}** 👉 Cible **{prix_cible:.4f}€** (Vu le {date_ref})")
                                     
                                     # --- INTERFACE D'ARBITRAGE(CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
@@ -1365,6 +1353,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
