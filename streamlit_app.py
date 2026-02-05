@@ -833,13 +833,11 @@ if session:
             
             # 1. Récupérer les anomalies PRIX depuis SQL (hors câbles et frais)
             res_prix = supabase.table("vue_anomalies_prix").select("*").eq("user_id", user_id).execute()
-            anomalies_prix = res_prix.data if res_prix.data else []
-            st.write(f"DEBUG: user_id = {user_id}, nb anomalies prix = {len(anomalies_prix)}")
+            anomalies_prix = res_prix.data if res_prix.data else []            
             
             # 2. Récupérer les anomalies CABLAGE depuis SQL
             res_cable = supabase.table("vue_anomalies_cablage").select("*").eq("user_id", user_id).execute()
-            anomalies_cable = res_cable.data if res_cable.data else []
-            st.write(f"DEBUG: nb anomalies cablage = {len(anomalies_cable)}")
+            anomalies_cable = res_cable.data if res_cable.data else []            
             
             # 3. Récupérer les FRAIS depuis SQL
             res_frais = supabase.table("vue_anomalies_frais").select("*").eq("user_id", user_id).execute()
@@ -1044,16 +1042,10 @@ if session:
                         "Détails Techniques": f"(Total: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
                     })
             
-            st.write(f"DEBUG: nb total anomalies = {len(anomalies)}")
-            
+                        
             if anomalies:
-                df_ano = pd.DataFrame(anomalies)
-                st.write(f"DEBUG: colonnes df_ano = {list(df_ano.columns)}")
-                st.write(f"DEBUG: Perte sum = {df_ano['Perte'].sum()}")
-                st.write(f"DEBUG: Date Facture sample = {df_ano['Date Facture'].head()}")
-                total_perte = df_ano['Perte'].sum()
-                st.write(f"DEBUG: df_ano Fournisseur unique = {df_ano['Fournisseur'].unique()}")
-                st.write(f"DEBUG: df_ano Perte par fourn = {df_ano.groupby('Fournisseur')['Perte'].sum()}")
+                df_ano = pd.DataFrame(anomalies)                
+                total_perte = df_ano['Perte'].sum()                
                 # --- BLOC PODIUM : MONTANT + % ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
@@ -1358,6 +1350,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
