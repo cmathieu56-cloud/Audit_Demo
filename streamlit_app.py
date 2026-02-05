@@ -904,7 +904,7 @@ if session:
                         "PU_Systeme": a.get('paye_unitaire', 0),
                         "Montant": a.get('paye_unitaire', 0) * a.get('quantite', 1),
                         "Prix Brut": a.get('prix_brut', 0),
-                        "Brut Réf": 0,
+                        "Brut Réf": a.get('brut_ref', 0),
                         "Remise": a.get('remise', ''),
                         "Remise Cible": f"{a.get('best_remise', 0)}%",
                         "Qte": a.get('quantite', 1),
@@ -1398,6 +1398,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
