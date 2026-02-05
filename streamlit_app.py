@@ -968,6 +968,50 @@ if session:
                         "Détails Techniques": f"Remise: {a.get('remise_val', 0)}% vs {a.get('best_remise', 0)}%"
                     })
             
+            # --- TRAITEMENT ANOMALIES PRIX NET (fournisseurs sans remise) ---
+            for a in anomalies_prix_net:
+                art = a.get('article', '')
+                num_fac = a.get('num_facture', '')
+                
+                if num_fac in articles_corriges and art in articles_corriges[num_fac]:
+                    continue
+                
+                accord = registre.get(art)
+                if accord and accord['type'] in ['ERREUR', 'PROMO']:
+                    continue
+                
+                perte = a.get('perte', 0)
+                cible = a.get('prix_cible', 0)
+                
+                if perte > 0.01:
+                    anomalies.append({
+                        "Fichier_Source": a.get('fichier', ''),
+                        "Fournisseur": a.get('fournisseur', ''),
+                        "Num Facture": num_fac,
+                        "Ref_Cmd": "",
+                        "BL": "",
+                        "Famille": a.get('famille', ''),
+                        "PU_Systeme": a.get('paye_unitaire', 0),
+                        "Montant": a.get('paye_unitaire', 0) * a.get('quantite', 1),
+                        "Prix Brut": a.get('prix_brut', 0),
+                        "Brut Réf": 0,
+                        "Remise": "-",
+                        "Remise Cible": f"{cible:.2f}€",
+                        "Qte": a.get('quantite', 1),
+                        "Ref": art,
+                        "Désignation": a.get('designation', ''),
+                        "Payé (U)": a.get('paye_unitaire', 0),
+                        "Cible (U)": cible,
+                        "Prix Cible": f"{cible:.4f} €",
+                        "Perte": perte,
+                        "Prix_Ref_Hist": cible,
+                        "Motif": "Hausse de prix",
+                        "Gravite": a.get('gravite', 'MINEUR'),
+                        "Date Facture": a.get('date_facture', ''),
+                        "Source Cible": a.get('date_best', ''),
+                        "Détails Techniques": f"Prix net: {a.get('paye_unitaire', 0)}€ vs Best: {cible}€"
+                    })
+            
             # --- TRAITEMENT FRAIS (SQL + config fournisseur) ---
             for a in anomalies_frais_sql:
                 fourn = a.get('fournisseur', '')
@@ -1354,6 +1398,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
