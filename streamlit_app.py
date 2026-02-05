@@ -837,7 +837,11 @@ if session:
             
             # 2. Récupérer les anomalies CABLAGE depuis SQL
             res_cable = supabase.table("vue_anomalies_cablage").select("*").eq("user_id", user_id).execute()
-            anomalies_cable = res_cable.data if res_cable.data else []            
+            anomalies_cable = res_cable.data if res_cable.data else []
+            
+            # 2.5 Récupérer les anomalies PRIX NET (fournisseurs sans remise)
+            res_prix_net = supabase.table("vue_anomalies_prix_net").select("*").eq("user_id", user_id).execute()
+            anomalies_prix_net = res_prix_net.data if res_prix_net.data else []
             
             # 3. Récupérer les FRAIS depuis SQL
             res_frais = supabase.table("vue_anomalies_frais").select("*").eq("user_id", user_id).execute()
@@ -1350,6 +1354,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
