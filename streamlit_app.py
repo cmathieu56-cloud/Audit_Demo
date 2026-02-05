@@ -1248,7 +1248,7 @@ if session:
                                         unite_promo_sql = "%"
                                         
                                         if val_promo_sql <= 0:
-                                            val_promo_sql = val_hist
+                                            val_promo_sql = prix_cible
                                             unite_promo_sql = "EUR"
                                         if st.button("🎁 Marquer comme Promo", key=f"p_{cle_unique}"):
                                             sauvegarder_accord(article, "PROMO", val_promo_sql, unite_promo_sql, user_id)
@@ -1353,6 +1353,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
