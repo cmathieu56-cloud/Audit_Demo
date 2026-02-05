@@ -700,8 +700,7 @@ if session:
             email = st.text_input("Email", value=settings.get('email', ''))
         with col2:
             siren = st.text_input("SIREN (9 chiffres)", value=settings.get('siren', ''))
-            tva = st.text_input("N° TVA", value=settings.get('tva', ''))
-            iban = st.text_input("IBAN", value=settings.get('iban', ''))
+            tva = st.text_input("N° TVA", value=settings.get('tva', ''))            
             telephone = st.text_input("Téléphone", value=settings.get('telephone', ''))
             nom_contact = st.text_input("Nom du gérant/contact", value=settings.get('nom_contact', ''))
         
@@ -715,14 +714,14 @@ if session:
                     "ville": ville,
                     "siren": siren,
                     "tva": tva,
-                    "iban": iban,
+                    "iban": "",
                     "email": email,
                     "telephone": telephone,
                     "nom_contact": nom_contact
                 }).execute()
                 st.session_state['user_settings'] = {
                     "nom_entreprise": nom_entreprise, "adresse": adresse, "code_postal": code_postal,
-                    "ville": ville, "siren": siren, "tva": tva, "iban": iban, "email": email,
+                    "ville": ville, "siren": siren, "tva": tva, "iban": "", "email": email,
                     "telephone": telephone, "nom_contact": nom_contact
                 }
                 st.success("✅ Infos entreprise enregistrées !")
@@ -1353,6 +1352,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
