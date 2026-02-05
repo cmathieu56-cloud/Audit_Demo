@@ -904,7 +904,7 @@ if session:
                         "Prix Brut": a.get('prix_brut', 0),
                         "Brut Réf": 0,
                         "Remise": a.get('remise', ''),
-                        "Remise Cible": f"{cible:.2f}€",
+                        "Remise Cible": f"{a.get('best_remise', 0)}%",
                         "Qte": a.get('quantite', 1),
                         "Ref": art,
                         "Désignation": a.get('designation', ''),
@@ -1358,6 +1358,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
