@@ -914,9 +914,10 @@ if session:
                         "Perte": perte,
                         "Prix_Ref_Hist": cible,
                         "Motif": "Hausse de prix",
+                        "Gravite": a.get('gravite', 'MINEUR'),
                         "Date Facture": a.get('date_facture', ''),
-                        "Source Cible": a.get('date_best_prix', ''),
-                        "Détails Techniques": ""
+                        "Source Cible": a.get('date_best', ''),
+                        "Détails Techniques": f"Remise éq: {a.get('remise_equivalente', 0)}% vs Best: {a.get('best_remise', 0)}%"
                     })
             
             # --- TRAITEMENT ANOMALIES CABLAGE (SQL) ---
@@ -959,6 +960,7 @@ if session:
                         "Perte": perte,
                         "Prix_Ref_Hist": cible,
                         "Motif": "Remise insuffisante",
+                        "Gravite": "ANOMALIE",
                         "Date Facture": a.get('date_facture', ''),
                         "Source Cible": a.get('date_best_remise', ''),
                         "Détails Techniques": f"Remise: {a.get('remise_val', 0)}% vs {a.get('best_remise', 0)}%"
@@ -998,6 +1000,7 @@ if session:
                         "Perte": perte,
                         "Prix_Ref_Hist": 0,
                         "Motif": "Frais Facturation Abusifs",
+                        "Gravite": "ANOMALIE",
                         "Date Facture": a.get('date_facture', ''),
                         "Source Cible": "-",
                         "Détails Techniques": f"(Max autorisé: {max_gestion}€)"
@@ -1035,6 +1038,7 @@ if session:
                         "Perte": row['Montant'],
                         "Prix_Ref_Hist": 0,
                         "Motif": "Port facturé malgré Franco",
+                        "Gravite": "CRITIQUE",
                         "Date Facture": row['Date'],
                         "Source Cible": "-",
                         "Détails Techniques": f"(Total: {total_fac:.2f}€ > Franco: {seuil_franco}€)"
@@ -1203,7 +1207,9 @@ if session:
                                     elif famille == "FRAIS PORT":
                                         st.markdown(f"**📦 {article}** - {nom_art} | Port facturé malgré Franco")
                                     else:
-                                        st.markdown(f"**📦 {article}** - {nom_art} | 🎯 Meilleure remise : **{remise_ref}** 👉 Cible **{prix_cible:.4f}€** (Vu le {date_ref})")
+                                        grav = group['Gravite'].iloc[0]
+                                        icone_grav = "🔴" if grav == "CRITIQUE" else "🟠" if grav == "ANOMALIE" else "🟡"
+                                        st.markdown(f"{icone_grav} **📦 {article}** - {nom_art} | 🎯 Meilleure remise : **{remise_ref}** 👉 Cible **{prix_cible:.4f}€** (Vu le {date_ref})")
                                     
                                     # --- INTERFACE D'ARBITRAGE(CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
@@ -1352,6 +1358,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
