@@ -835,8 +835,8 @@ if session:
             res_prix = supabase.table("vue_anomalies_prix").select("*").eq("user_id", user_id).execute()
             anomalies_prix = res_prix.data if res_prix.data else []            
             if anomalies_prix:
-    st.write("CLÉS:", list(anomalies_prix[0].keys()))
-    st.write("EXEMPLE:", anomalies_prix[0])
+                st.write("CLÉS:", list(anomalies_prix[0].keys()))
+                st.write("EXEMPLE:", anomalies_prix[0])
             # 2. Récupérer les anomalies CABLAGE depuis SQL
             res_cable = supabase.table("vue_anomalies_cablage").select("*").eq("user_id", user_id).execute()
             anomalies_cable = res_cable.data if res_cable.data else []
@@ -1400,6 +1400,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
