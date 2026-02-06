@@ -1328,23 +1328,21 @@ if session:
                                                 except Exception as e:
                                                     st.error(f"Erreur suppression : {e}")
                                     # Bouton hausse annuelle - BRUT pour fournisseurs avec remise, NET sinon
-                                if group['Famille'].iloc[0] != "CABLAGE":
-                                    c_bt4 = st.columns([1])[0]
-                                    with c_bt4:
-                                        best_remise_val = clean_float(str(group['Brut Réf'].iloc[0]))
-                                        paye_net = group['Payé (U)'].iloc[0]
-                                        prix_brut_ligne = clean_float(str(group['Prix Brut'].iloc[0]))
-                                        
-                                        # Si la meilleure remise > 0 → fournisseur avec remise → on valide le BRUT
-                                        if group['Remise'].iloc[0] not in ['-', '0', ''] and clean_float(str(group['Remise'].iloc[0]).replace('%','')) > 0:
-                                            if st.button(f"📈 Hausse annuelle (valider brut {prix_brut_ligne:.2f}€)", key=f"h_{cle_unique}"):
-                                                sauvegarder_accord(article, "HAUSSE", prix_brut_ligne, "BRUT", user_id)
-                                                st.rerun()
-                                        else:
-                                            # Fournisseur sans remise → on valide le NET
-                                            if st.button(f"📈 Hausse annuelle (valider {paye_net:.2f}€)", key=f"h_{cle_unique}"):
-                                                sauvegarder_accord(article, "HAUSSE", clean_float(str(paye_net)), "EUR", user_id)
-                                                st.rerun()
+                                    if group['Famille'].iloc[0] != "CABLAGE":
+                                        c_bt4 = st.columns([1])[0]
+                                        with c_bt4:
+                                            best_remise_val = clean_float(str(group['Brut Réf'].iloc[0]))
+                                            paye_net = group['Payé (U)'].iloc[0]
+                                            prix_brut_ligne = clean_float(str(group['Prix Brut'].iloc[0]))
+                                            
+                                            if group['Remise'].iloc[0] not in ['-', '0', ''] and clean_float(str(group['Remise'].iloc[0]).replace('%','')) > 0:
+                                                if st.button(f"📈 Hausse annuelle (valider brut {prix_brut_ligne:.2f}€)", key=f"h_{cle_unique}"):
+                                                    sauvegarder_accord(article, "HAUSSE", prix_brut_ligne, "BRUT", user_id)
+                                                    st.rerun()
+                                            else:
+                                                if st.button(f"📈 Hausse annuelle (valider {paye_net:.2f}€)", key=f"h_{cle_unique}"):
+                                                    sauvegarder_accord(article, "HAUSSE", clean_float(str(paye_net)), "EUR", user_id)
+                                                    st.rerun()
 
                                     # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
                                     sub_df = group[['Num Facture', 'Date Facture', 'Qte', 'Prix Brut', 'Brut Réf', 'Remise', 'Payé (U)', 'Perte', 'Prix Cible']].sort_values('Date Facture', ascending=False)
@@ -1434,6 +1432,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
