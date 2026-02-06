@@ -881,17 +881,33 @@ if session:
                 if accord and accord['type'] == 'ERREUR':
                     continue
                 
-                # Si HAUSSE validée, on compare au nouveau prix
-                if accord and accord['type'] == 'HAUSSE':
-                    prix_hausse = clean_float(str(accord['valeur']))
-                    if prix_hausse > 0 and a.get('paye_unitaire', 0) <= prix_hausse + 0.05:
+                # Si HAUSSE validée
+            if accord and accord['type'] == 'HAUSSE':
+                valeur_hausse = clean_float(str(accord['valeur']))
+                unite_hausse = accord.get('unite', 'EUR')
+                
+                if unite_hausse == 'BRUT' and valeur_hausse > 0:
+                    # Fournisseur avec remise : on recalcule le net cible
+                    # nouveau_cible = nouveau_brut × (1 - meilleure_remise)
+                    best_remise = a.get('best_remise', 0)
+                    cible = valeur_hausse * (1 - best_remise / 100)
+                    paye = a.get('paye_unitaire', 0)
+                    
+                    if paye <= cible + 0.05:
                         continue
-                    elif prix_hausse > 0:
+                    else:
+                        perte = (paye - cible) * a.get('quantite', 1)
+                elif valeur_hausse > 0:
+                    # Fournisseur sans remise : on compare au net directement
+                    prix_hausse = valeur_hausse
+                    if a.get('paye_unitaire', 0) <= prix_hausse + 0.05:
+                        continue
+                    else:
                         perte = (a.get('paye_unitaire', 0) - prix_hausse) * a.get('quantite', 1)
                         cible = prix_hausse
-                    else:
-                        perte = a.get('perte', 0)
-                        cible = a.get('prix_cible', 0)
+                else:
+                    perte = a.get('perte', 0)
+                    cible = a.get('prix_cible', 0))
                 else:
                     perte = a.get('perte', 0)
                     cible = a.get('prix_cible', 0)
@@ -1315,12 +1331,23 @@ if session:
                                                     st.rerun()
                                                 except Exception as e:
                                                     st.error(f"Erreur suppression : {e}")
-                                    # Louis : Bouton hausse annuelle
-                                    if group['Famille'].iloc[0] != "CABLAGE":
-                                        c_bt4 = st.columns([1])[0]
-                                        with c_bt4:                                            
-                                            if st.button(f"📈 Hausse annuelle (valider {group['Payé (U)'].iloc[0]:.2f}€)", key=f"h_{cle_unique}"):
-                                                sauvegarder_accord(article, "HAUSSE", clean_float(str(group['Payé (U)'].iloc[0])), "EUR", user_id)
+                                    # Bouton hausse annuelle - BRUT pour fournisseurs avec remise, NET sinon
+                                if group['Famille'].iloc[0] != "CABLAGE":
+                                    c_bt4 = st.columns([1])[0]
+                                    with c_bt4:
+                                        best_remise_val = clean_float(str(group['Brut Réf'].iloc[0]))
+                                        paye_net = group['Payé (U)'].iloc[0]
+                                        prix_brut_ligne = clean_float(str(group['Prix Brut'].iloc[0]))
+                                        
+                                        # Si la meilleure remise > 0 → fournisseur avec remise → on valide le BRUT
+                                        if group['Remise'].iloc[0] not in ['-', '0', ''] and clean_float(str(group['Remise'].iloc[0]).replace('%','')) > 0:
+                                            if st.button(f"📈 Hausse annuelle (valider brut {prix_brut_ligne:.2f}€)", key=f"h_{cle_unique}"):
+                                                sauvegarder_accord(article, "HAUSSE", prix_brut_ligne, "BRUT", user_id)
+                                                st.rerun()
+                                        else:
+                                            # Fournisseur sans remise → on valide le NET
+                                            if st.button(f"📈 Hausse annuelle (valider {paye_net:.2f}€)", key=f"h_{cle_unique}"):
+                                                sauvegarder_accord(article, "HAUSSE", clean_float(str(paye_net)), "EUR", user_id)
                                                 st.rerun()
 
                                     # Louis : On prépare l'affichage du petit tableau avec les colonnes de preuves techniques.
@@ -1411,6 +1438,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
