@@ -882,9 +882,9 @@ if session:
                     continue
                 
                 # Si HAUSSE validée
-            if accord and accord['type'] == 'HAUSSE':
-                valeur_hausse = clean_float(str(accord['valeur']))
-                unite_hausse = accord.get('unite', 'EUR')
+                if accord and accord['type'] == 'HAUSSE':
+                    valeur_hausse = clean_float(str(accord['valeur']))
+                    unite_hausse = accord.get('unite', 'EUR')
                 
                 if unite_hausse == 'BRUT' and valeur_hausse > 0:
                     # Fournisseur avec remise : on recalcule le net cible
@@ -1438,6 +1438,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
