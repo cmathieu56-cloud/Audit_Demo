@@ -907,7 +907,7 @@ if session:
                         cible = prix_hausse
                 else:
                     perte = a.get('perte', 0)
-                    cible = a.get('prix_cible', 0))
+                    cible = a.get('prix_cible', 0)
                 else:
                     perte = a.get('perte', 0)
                     cible = a.get('prix_cible', 0)
@@ -1438,6 +1438,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
