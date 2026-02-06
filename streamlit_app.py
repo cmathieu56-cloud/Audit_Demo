@@ -9,6 +9,7 @@ import time
 import os
 from datetime import datetime
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==============================================================================
 # 1. CONFIGURATION & REGISTRE
@@ -1385,34 +1386,69 @@ if session:
             uploaded = st.file_uploader("PDFs", type="pdf", accept_multiple_files=True, key=f"uploader_{st.session_state['uploader_key']}")
             force_rewrite = st.checkbox("⚠️ Écraser doublons (Forcer ré-analyse)", value=False)
             
-            if uploaded: 
+            if uploaded:
                 if st.button("🚀 LANCER"):
-                    barre = st.progress(0)
-                    for i, f in enumerate(uploaded):
-                        with st.status(f"Analyse de {f.name}...", expanded=True) as status_box:
-                            if f.name in memoire and not force_rewrite:
-                                status_box.update(label=f"⚠️ {f.name} ignoré", state="error")
-                            else:
-                                status_box.write("📤 Étape 1 : Envoi vers Supabase...")
-                                try:
-                                    supabase.storage.from_("factures_audit").upload(f.name, f.getvalue(), {"upsert": "true"})
-                                    status_box.write("🧠 Étape 2 : L'IA calcule (15-20s)...")
-                                    ok, msg = traiter_un_fichier(f.name, user_id)
-                                    
-                                    if ok:
-                                        status_box.update(label=f"✅ {f.name} fini", state="complete", expanded=False)
-                                    else:
-                                        status_box.update(label=f"❌ Erreur {f.name}", state="error")
-                                        st.error(msg)
-                                except Exception as up_err:
-                                    status_box.update(label="❌ Erreur technique", state="error")
-                                    st.error(up_err)
-                        
-                        barre.progress((i + 1) / len(uploaded))
+                    # Phase 1 : Upload séquentiel (rapide)
+                    fichiers_a_traiter = []
+                    for f in uploaded:
+                        if f.name in memoire and not force_rewrite:
+                            st.warning(f"⚠️ {f.name} ignoré (doublon)")
+                        else:
+                            try:
+                                supabase.storage.from_("factures_audit").upload(
+                                    f.name, f.getvalue(), {"upsert": "true"}
+                                )
+                                fichiers_a_traiter.append(f.name)
+                            except Exception as up_err:
+                                st.error(f"❌ Upload {f.name} : {up_err}")
 
-                    st.session_state['uploader_key'] += 1 
-                    time.sleep(1)
-                    st.rerun()
+                    if not fichiers_a_traiter:
+                        st.info("Rien à traiter.")
+                    else:
+                        total = len(fichiers_a_traiter)
+                        barre = st.progress(0, text=f"Traitement de {total} facture(s)...")
+                        resultats_zone = st.container()
+                        done_count = 0
+
+                        def traiter_avec_retry(nom, uid, max_retries=3):
+                            """Retente jusqu'à max_retries fois avec 3s d'attente entre chaque tentative."""
+                            for tentative in range(1, max_retries + 1):
+                                ok, msg = traiter_un_fichier(nom, uid)
+                                if ok:
+                                    return True, msg, tentative
+                                if tentative < max_retries:
+                                    time.sleep(3)
+                            return False, msg, max_retries
+
+                        # Phase 2 : Traitement parallèle Gemini
+                        with ThreadPoolExecutor(max_workers=5) as executor:
+                            futures = {
+                                executor.submit(traiter_avec_retry, nom, user_id): nom
+                                for nom in fichiers_a_traiter
+                            }
+                            for future in as_completed(futures):
+                                nom = futures[future]
+                                done_count += 1
+                                try:
+                                    ok, msg, tentatives = future.result()
+                                    if ok:
+                                        txt = f"✅ {nom}"
+                                        if tentatives > 1:
+                                            txt += f" (réussi à la tentative {tentatives}/3)"
+                                        resultats_zone.success(txt)
+                                    else:
+                                        resultats_zone.error(f"❌ {nom} : {msg} (après 3 tentatives)")
+                                except Exception as exc:
+                                    resultats_zone.error(f"❌ {nom} : {exc}")
+                                barre.progress(
+                                    done_count / total,
+                                    text=f"Facture {done_count}/{total} — {nom}"
+                                )
+
+                        barre.progress(1.0, text=f"Terminé — {total} facture(s) traitée(s)")
+                        st.session_state['uploader_key'] += 1
+                        time.sleep(1)
+                        st.rerun()
 
     with tab_brut:
         st.header("🔍 Scan total des documents")
