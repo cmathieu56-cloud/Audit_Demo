@@ -882,32 +882,28 @@ if session:
                     continue
                 
                 # Si HAUSSE validée
-                 if accord and accord['type'] == 'HAUSSE':
-                     valeur_hausse = clean_float(str(accord['valeur']))
-                     unite_hausse = accord.get('unite', 'EUR')
-                
-                if unite_hausse == 'BRUT' and valeur_hausse > 0:
-                    # Fournisseur avec remise : on recalcule le net cible
-                    # nouveau_cible = nouveau_brut × (1 - meilleure_remise)
-                    best_remise = a.get('best_remise', 0)
-                    cible = valeur_hausse * (1 - best_remise / 100)
-                    paye = a.get('paye_unitaire', 0)
+                if accord and accord['type'] == 'HAUSSE':
+                    valeur_hausse = clean_float(str(accord['valeur']))
+                    unite_hausse = accord.get('unite', 'EUR')
                     
-                    if paye <= cible + 0.05:
-                        continue
+                    if unite_hausse == 'BRUT' and valeur_hausse > 0:
+                        best_remise = a.get('best_remise', 0)
+                        cible = valeur_hausse * (1 - best_remise / 100)
+                        paye = a.get('paye_unitaire', 0)
+                        if paye <= cible + 0.05:
+                            continue
+                        else:
+                            perte = (paye - cible) * a.get('quantite', 1)
+                    elif valeur_hausse > 0:
+                        prix_hausse = valeur_hausse
+                        if a.get('paye_unitaire', 0) <= prix_hausse + 0.05:
+                            continue
+                        else:
+                            perte = (a.get('paye_unitaire', 0) - prix_hausse) * a.get('quantite', 1)
+                            cible = prix_hausse
                     else:
-                        perte = (paye - cible) * a.get('quantite', 1)
-                elif valeur_hausse > 0:
-                    # Fournisseur sans remise : on compare au net directement
-                    prix_hausse = valeur_hausse
-                    if a.get('paye_unitaire', 0) <= prix_hausse + 0.05:
-                        continue
-                    else:
-                        perte = (a.get('paye_unitaire', 0) - prix_hausse) * a.get('quantite', 1)
-                        cible = prix_hausse
-                else:
-                    perte = a.get('perte', 0)
-                    cible = a.get('prix_cible', 0)
+                        perte = a.get('perte', 0)
+                        cible = a.get('prix_cible', 0)
                 else:
                     perte = a.get('perte', 0)
                     cible = a.get('prix_cible', 0)
@@ -1438,6 +1434,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
