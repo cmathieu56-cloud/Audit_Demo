@@ -876,8 +876,9 @@ if session:
                     continue
                 
                 # Skip si accord ERREUR ou PROMO
+                # Skip si accord ERREUR
                 accord = registre.get(art)
-                if accord and accord['type'] in ['ERREUR', 'PROMO']:
+                if accord and accord['type'] == 'ERREUR':
                     continue
                 
                 # Si HAUSSE validée, on compare au nouveau prix
@@ -933,7 +934,7 @@ if session:
                     continue
                 
                 accord = registre.get(art)
-                if accord and accord['type'] in ['ERREUR', 'PROMO']:
+                if accord and accord['type'] == 'ERREUR':
                     continue
                 
                 perte = a.get('perte', 0)
@@ -1400,6 +1401,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
