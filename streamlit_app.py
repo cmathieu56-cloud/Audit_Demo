@@ -116,7 +116,7 @@ def charger_registre(user_id=None):
             query = query.eq("user_id", user_id)
         res = query.execute()
         return {r['article']: {'type': r['type_accord'], 'valeur': r['valeur'], 'unite': r['unite'], 'date': r['date_maj']} for r in res.data}
-    except:
+    except Exception:
         return {}
 
 def sauvegarder_accord(article, type_accord, valeur, unite="EUR", user_id=None):
@@ -147,7 +147,7 @@ def clean_float(val):
         val = val.replace(',', '.')
     try:
         return float(val)
-    except:
+    except Exception:
         return 0.0
 
 def calculer_remise_combine(val_str):
@@ -169,7 +169,7 @@ def calculer_remise_combine(val_str):
                 
         remise_totale = (1 - reste_a_payer) * 100
         return round(remise_totale, 2)
-    except:
+    except Exception:
         return 0.0
 
 def detecter_famille(label, ref=""):
@@ -228,7 +228,7 @@ def extraire_json_robuste(texte):
     try:
         match = re.search(r"(\{.*\})", texte, re.DOTALL)
         if match: return json.loads(match.group(1))
-    except: pass
+    except Exception: pass
     return None
 
 def appliquer_correctifs_specifiques(data, texte_complet):
@@ -342,12 +342,11 @@ def get_fournisseur_normalise(siret_ou_tva, nom_gemini, user_id):
                 "tva": tva_clean
             }).execute()
             return nom_gemini
-    except:
+    except Exception:
         return nom_gemini
 
 def traiter_un_fichier(nom_fichier, user_id):
     try:
-        path_storage = f"{user_id}/{nom_fichier}"
         file_data = supabase.storage.from_("factures_audit").download(nom_fichier)
         # [MODIFICATION] : Passage à Gemini 3.0 Flash-preview (Stable & mais lent) la version 2 est trop pourrier pour le test
         # On remplace la version "3-preview" qui lag par la référence de vitesse actuelle.
@@ -413,7 +412,8 @@ def traiter_un_fichier(nom_fichier, user_id):
         
         # Louis : On fait un premier appel rapide pour voir si c'est un avoir
         # Si le nom du fichier contient un montant négatif (ex: -27_04) c'est probablement un avoir
-        is_avoir = bool(re.search(r"-\d", nom_fichier))
+        nom_lower = nom_fichier.lower()
+        is_avoir = any(kw in nom_lower for kw in ["avoir", "credit", "avr_", "av-", "av_"])
         
         if is_avoir:
             res = model.generate_content([prompt_avoir(), {"mime_type": "application/pdf", "data": file_data}])
@@ -447,11 +447,13 @@ def traiter_un_fichier(nom_fichier, user_id):
         n_fac = data_json.get('num_facture', '').strip()
         n_cmd = data_json.get('ref_commande', '').strip()
         
-        if n_fac and n_cmd and (n_fac in n_cmd or n_cmd in n_fac):
+        if n_fac and n_cmd and n_fac == n_cmd:
              data_json['ref_commande'] = "-"
         # ------------------------------------------------------
 
         # --- PATCH MANUEL : On repasse derrière l'IA pour les cas tordus ---
+        data_json = appliquer_correctifs_specifiques(data_json, res.text)
+
         supabase.table("audit_results").upsert({
             "file_name": nom_fichier,
             "user_id": user_id,
@@ -480,15 +482,7 @@ def traiter_un_fichier(nom_fichier, user_id):
             base = clean_float(str(l.get('base_facturation', 1)))
             if base <= 0: base = 1
             remise_str = str(l.get('remise', '0'))
-            # Louis : Calcul du taux équivalent pour les remises combinées (60+10 = 64%)
-            remise_parts = remise_str.replace('%', '').split('+')
-            remise_v = 0
-            reste = 100
-            for part in remise_parts:
-                taux = clean_float(part)
-                remise_v += reste * taux / 100
-                reste = reste * (1 - taux / 100)
-            remise_v = round(remise_v, 2)
+            remise_v = calculer_remise_combine(remise_str)
             pnu = clean_float(str(l.get('prix_net_unitaire', l.get('prix_net', 0))))
             mont = clean_float(str(l.get('montant', 0)))
             bl = l.get('num_bl_ligne', '')
@@ -516,7 +510,8 @@ def traiter_un_fichier(nom_fichier, user_id):
             }).execute()
         
         return True, "OK"
-    except Exception as e: return False, str(e)
+    except Exception as e:
+        return False, f"[{nom_fichier}] {str(e)}"
 
 def afficher_rapport_sql(fournisseur_nom):
 
@@ -610,7 +605,7 @@ if session:
                 raw_net = str(l.get('prix_net', '0'))
                 if '/' in raw_net and base_fac == 1:
                     try: p_net = clean_float(raw_net.split('/')[0]) / float(raw_net.split('/')[1])
-                    except: pass
+                    except Exception: pass
 
                 # Calcul du Brut Réel
                 p_brut_lu = clean_float(l.get('prix_brut_unitaire', l.get('prix_brut', 0)))
@@ -618,7 +613,7 @@ if session:
 
                 if '/' in str(l.get('prix_brut', '')) and base_fac == 1:
                     try: p_brut = clean_float(str(l.get('prix_brut')).split('/')[0]) / float(str(l.get('prix_brut')).split('/')[1])
-                    except: pass
+                    except Exception: pass
                 
                 # On stocke le brut "propre" pour l'affichage
                 raw_brut = f"{p_brut:.4f}"
@@ -669,7 +664,7 @@ if session:
                     "PU_Systeme": pu_systeme,
                     "Famille": famille
                 })
-        except: continue
+        except Exception: continue
 
     df = pd.DataFrame(all_rows)
 
@@ -686,7 +681,7 @@ if session:
                     st.session_state['user_settings'] = res_settings.data[0]
                 else:
                     st.session_state['user_settings'] = {}
-            except:
+            except Exception:
                 st.session_state['user_settings'] = {}
         
         settings = st.session_state['user_settings']
@@ -741,7 +736,7 @@ if session:
                     )[['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)']]
                 else:
                     st.session_state['config_df'] = pd.DataFrame(columns=['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)'])
-            except:
+            except Exception:
                 st.session_state['config_df'] = pd.DataFrame(columns=['Fournisseur', 'Franco (Seuil €)', 'Max Gestion (€)'])
 
         # 2. Ajout des nouveaux fournisseurs détectés dans le scan
@@ -859,9 +854,9 @@ if session:
                                 articles_corriges[fac_orig] = []
                             for l_av in data_av.get('lignes', []):
                                 articles_corriges[fac_orig].append(l_av.get('article', ''))
-                except:
+                except Exception:
                     continue
-            
+
             anomalies = []
             
             # --- TRAITEMENT ANOMALIES PRIX (SQL) ---
@@ -950,8 +945,6 @@ if session:
                 perte = a.get('perte', 0)
                 cible = a.get('prix_cible', 0)
                 
-                # Seuil 3% pour câbles
-                ecart_pourcent = (perte / (cible * a.get('quantite', 1))) * 100 if cible > 0 else 0
                 if perte > 0.01:
                     anomalies.append({
                         "Fichier_Source": a.get('fichier', ''),
@@ -1074,7 +1067,7 @@ if session:
                 seuil_franco = rules.get("Franco (Seuil €)", 0.0)
                 total_fac = facture_totals.get(f_name, 0)
                 
-                if total_fac >= seuil_franco and row['Montant'] > 0:
+                if seuil_franco > 0 and total_fac >= seuil_franco and row['Montant'] > 0:
                     anomalies.append({
                         "Fichier_Source": f_name,
                         "Fournisseur": fourn,
@@ -1377,6 +1370,8 @@ if session:
             st.divider()
             if st.button("🗑️ TOUT EFFACER (CE COMPTE)", type="primary"):
                 try:
+                    supabase.table("lignes_factures").delete().eq("user_id", user_id).execute()
+                    supabase.table("accords_commerciaux").delete().eq("user_id", user_id).execute()
                     supabase.table("audit_results").delete().eq("user_id", user_id).execute()
                     st.success("💥 Vos données sont vidées !")
                     st.session_state['uploader_key'] += 1 # 👈 C'est ça qui vide la liste
