@@ -1305,7 +1305,17 @@ if session:
                                         if st.button("❌ Ignorer Erreur", key=f"e_{cle_unique}"):
                                             sauvegarder_accord(article, "ERREUR", 0, "EUR", user_id)
                                             st.rerun()
-                                    # Louis : Bouton hausse annuelle - valide le nouveau prix comme référence
+                                    # Bouton Annuler : si un accord existe, on propose de le supprimer
+                                    if accord_existant:
+                                        c_bt_annul = st.columns([1])[0]
+                                        with c_bt_annul:
+                                            if st.button(f"🔓 Annuler ({accord_existant['type']})", key=f"annul_{cle_unique}"):
+                                                try:
+                                                    supabase.table("accords_commerciaux").delete().eq("article", article).eq("user_id", user_id).execute()
+                                                    st.rerun()
+                                                except Exception as e:
+                                                    st.error(f"Erreur suppression : {e}")
+                                    # Louis : Bouton hausse annuelle
                                     if group['Famille'].iloc[0] != "CABLAGE":
                                         c_bt4 = st.columns([1])[0]
                                         with c_bt4:                                            
@@ -1401,6 +1411,7 @@ if session:
                 st.text_area("Résultat Gemini (Full Scan)", raw_txt, height=400)
         else:
             st.info("Aucune donnée enregistrée pour ce compte.")
+
 
 
 
