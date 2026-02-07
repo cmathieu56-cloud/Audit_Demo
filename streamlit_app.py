@@ -1374,7 +1374,8 @@ if session:
         col_info, col_drop = st.columns([1, 2])
         
         with col_info:
-            st.write("📂 **En mémoire (Compte actuel) :**")
+            nb_factures = len(memoire) if memoire else 0
+            st.write(f"📂 **En mémoire (Compte actuel) : {nb_factures} facture(s)**")
             if memoire:
                 # Louis : J'ai ajouté sorted() autour de la liste pour que tes fichiers soient rangés par ordre alphabétique (A->Z)
                 st.dataframe(pd.DataFrame({"Fichiers": sorted(list(memoire.keys()))}), hide_index=True, height=300)
