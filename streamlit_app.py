@@ -1430,7 +1430,8 @@ if session:
                     else:
                         total = len(fichiers_a_traiter)
                         barre = st.progress(0, text=f"Traitement de {total} facture(s)...")
-                        resultats_zone = st.container()
+                        resultats_zone = st.empty()
+                        resultats_msgs = []
                         done_count = 0
 
                         def traiter_avec_retry(nom, uid, max_retries=3):
@@ -1458,11 +1459,17 @@ if session:
                                         txt = f"✅ {nom}"
                                         if tentatives > 1:
                                             txt += f" (réussi à la tentative {tentatives}/3)"
-                                        resultats_zone.success(txt)
+                                        resultats_msgs.insert(0, ("ok", txt))
                                     else:
-                                        resultats_zone.error(f"❌ {nom} : {msg} (après 3 tentatives)")
+                                        resultats_msgs.insert(0, ("err", f"❌ {nom} : {msg} (après 3 tentatives)"))
                                 except Exception as exc:
-                                    resultats_zone.error(f"❌ {nom} : {exc}")
+                                    resultats_msgs.insert(0, ("err", f"❌ {nom} : {exc}"))
+                                with resultats_zone.container():
+                                    for typ, m in resultats_msgs:
+                                        if typ == "ok":
+                                            st.success(m)
+                                        else:
+                                            st.error(m)
                                 barre.progress(
                                     done_count / total,
                                     text=f"Facture {done_count}/{total} — {nom}"
