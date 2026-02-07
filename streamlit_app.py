@@ -1099,8 +1099,16 @@ if session:
             
                         
             if anomalies:
-                df_ano = pd.DataFrame(anomalies)                
-                total_perte = df_ano['Perte'].sum()                
+                df_ano = pd.DataFrame(anomalies)
+                # Normalisation des noms de fournisseurs (cohérence SQL ↔ Python)
+                def normaliser_fournisseur(f):
+                    fu = str(f).upper()
+                    if "YESSS" in fu or "CEF" in fu: return "YESSS ELECTRIQUE"
+                    if "AUSTRAL" in fu: return "AUSTRAL HORIZON"
+                    if "PARTEDIS" in fu: return "PARTEDIS"
+                    return f
+                df_ano['Fournisseur'] = df_ano['Fournisseur'].apply(normaliser_fournisseur)
+                total_perte = df_ano['Perte'].sum()
                 # --- BLOC PODIUM : MONTANT + % ---
                 st.subheader("🏆 Podium des Dettes & Évolution")
                 
