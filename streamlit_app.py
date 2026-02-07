@@ -1401,19 +1401,20 @@ if session:
             
             if uploaded:
                 if st.button("🚀 LANCER"):
-                    # Phase 1 : Upload séquentiel (rapide)
-                    fichiers_a_traiter = []
-                    for f in uploaded:
-                        if f.name in memoire and not force_rewrite:
-                            st.warning(f"⚠️ {f.name} ignoré (doublon)")
-                        else:
-                            try:
-                                supabase.storage.from_("factures_audit").upload(
-                                    f.name, f.getvalue(), {"upsert": "true"}
-                                )
-                                fichiers_a_traiter.append(f.name)
-                            except Exception as up_err:
-                                st.error(f"❌ Upload {f.name} : {up_err}")
+                    with st.spinner("Upload en cours..."):
+                        # Phase 1 : Upload séquentiel (rapide)
+                        fichiers_a_traiter = []
+                        for f in uploaded:
+                            if f.name in memoire and not force_rewrite:
+                                st.warning(f"⚠️ {f.name} ignoré (doublon)")
+                            else:
+                                try:
+                                    supabase.storage.from_("factures_audit").upload(
+                                        f.name, f.getvalue(), {"upsert": "true"}
+                                    )
+                                    fichiers_a_traiter.append(f.name)
+                                except Exception as up_err:
+                                    st.error(f"❌ Upload {f.name} : {up_err}")
 
                     if not fichiers_a_traiter:
                         st.info("Rien à traiter.")
@@ -1434,7 +1435,7 @@ if session:
                             return False, msg, max_retries
 
                         # Phase 2 : Traitement parallèle Gemini
-                        with ThreadPoolExecutor(max_workers=5) as executor:
+                        with ThreadPoolExecutor(max_workers=3) as executor:
                             futures = {
                                 executor.submit(traiter_avec_retry, nom, user_id): nom
                                 for nom in fichiers_a_traiter
