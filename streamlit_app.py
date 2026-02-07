@@ -1257,7 +1257,20 @@ if session:
                                         grav = group['Gravite'].iloc[0]
                                         icone_grav = "🔴" if grav == "CRITIQUE" else "🟠" if grav == "ANOMALIE" else "🟡"
                                         st.markdown(f"{icone_grav} **📦 {article}** - {nom_art} | 🎯 Meilleure remise : **{remise_ref}** 👉 Cible **{prix_cible:.4f}€** (Vu le {date_ref})")
-                                    
+
+                                    # --- Détection référence sans remise (prix forcé probable) ---
+                                    if remise_ref == "0%" and famille not in ("FRAIS GESTION", "FRAIS PORT"):
+                                        accord_ref = registre.get(article)
+                                        if not (accord_ref and accord_ref['type'] == 'PROMO'):
+                                            col_warn, col_btn_ref = st.columns([3, 1])
+                                            with col_warn:
+                                                st.caption("⚠️ Référence sans remise (prix forcé ?)")
+                                            with col_btn_ref:
+                                                cle_ref = f"{fourn_nom}_{article}".replace(" ", "_")
+                                                if st.button("🎁 Ref = Promo", key=f"refpromo_{cle_ref}"):
+                                                    sauvegarder_accord(article, "PROMO", prix_cible, "EUR", user_id)
+                                                    st.rerun()
+
                                     # --- INTERFACE D'ARBITRAGE(CORRECTIF CLÉ UNIQUE) ---
                                     c_bt1, c_bt2, c_bt3 = st.columns(3)
                                     # On crée une clé unique en combinant Fournisseur + Article
