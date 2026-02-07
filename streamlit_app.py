@@ -1430,9 +1430,13 @@ if session:
                     else:
                         total = len(fichiers_a_traiter)
                         barre = st.progress(0, text=f"Traitement de {total} facture(s)...")
+                        compteur_zone = st.empty()
                         resultats_zone = st.empty()
                         resultats_msgs = []
                         done_count = 0
+                        ok_count = 0
+                        err_count = 0
+                        t_start = time.time()
 
                         def traiter_avec_retry(nom, uid, max_retries=3):
                             """Retente jusqu'à max_retries fois avec 3s d'attente entre chaque tentative."""
@@ -1456,26 +1460,38 @@ if session:
                                 try:
                                     ok, msg, tentatives = future.result()
                                     if ok:
+                                        ok_count += 1
                                         txt = f"✅ {nom}"
                                         if tentatives > 1:
                                             txt += f" (réussi à la tentative {tentatives}/3)"
                                         resultats_msgs.insert(0, ("ok", txt))
                                     else:
+                                        err_count += 1
                                         resultats_msgs.insert(0, ("err", f"❌ {nom} : {msg} (après 3 tentatives)"))
                                 except Exception as exc:
+                                    err_count += 1
                                     resultats_msgs.insert(0, ("err", f"❌ {nom} : {exc}"))
+                                # Estimation temps restant
+                                elapsed = time.time() - t_start
+                                restant = int((elapsed / done_count) * (total - done_count))
+                                if restant >= 60:
+                                    eta_txt = f"~{restant // 60} min {restant % 60:02d}s restantes"
+                                else:
+                                    eta_txt = f"~{restant}s restantes"
+                                barre.progress(
+                                    done_count / total,
+                                    text=f"Facture {done_count}/{total} — {eta_txt}"
+                                )
+                                compteur_zone.markdown(f"**{ok_count}** réussie(s) · **{err_count}** échouée(s)")
                                 with resultats_zone.container():
                                     for typ, m in resultats_msgs:
                                         if typ == "ok":
                                             st.success(m)
                                         else:
                                             st.error(m)
-                                barre.progress(
-                                    done_count / total,
-                                    text=f"Facture {done_count}/{total} — {nom}"
-                                )
 
-                        barre.progress(1.0, text=f"Terminé — {total} facture(s) traitée(s)")
+                        duree = int(time.time() - t_start)
+                        barre.progress(1.0, text=f"Terminé en {duree // 60}min {duree % 60:02d}s — {ok_count} réussie(s), {err_count} échouée(s)")
                         st.session_state['uploader_key'] += 1
                         time.sleep(1)
                         st.rerun()
